@@ -232,6 +232,23 @@ class Alarm(Base):
     # Alarm content
     title = Column(String(255), nullable=False)
     message = Column(Text, nullable=False)
+    details = Column(Text)  # Additional details (JSON format)
+    
+    # Port change tracking (for MAC moved alarms)
+    mac_address = Column(String(17))  # MAC address involved in the alarm
+    old_value = Column(Text)  # Old value (for change detection)
+    new_value = Column(Text)  # New value (for change detection)
+    from_port = Column(Integer)  # Source port (for MAC moved)
+    to_port = Column(Integer)  # Destination port (for MAC moved)
+    
+    # Alarm uniqueness fingerprint
+    alarm_fingerprint = Column(String(255))  # Unique identifier to prevent duplicates
+    
+    # Acknowledgment tracking
+    acknowledgment_type = Column(String(50))  # Type of acknowledgment (known_change, silenced, resolved)
+    silence_until = Column(DateTime)  # Silence alarm until this time
+    acknowledged_by = Column(String(100))  # User who acknowledged
+    resolved_by = Column(String(100))  # User who resolved
     
     # State tracking
     occurrence_count = Column(Integer, default=1, nullable=False)
@@ -244,6 +261,10 @@ class Alarm(Base):
     notification_sent = Column(Boolean, default=False, nullable=False)
     last_notification_sent = Column(DateTime)
     
+    # Timestamps
+    created_at = Column(DateTime, default=get_current_time, nullable=False)
+    updated_at = Column(DateTime, default=get_current_time, onupdate=get_current_time, nullable=False)
+    
     # Relationships
     device = relationship("SNMPDevice", back_populates="alarms")
     history = relationship("AlarmHistory", back_populates="alarm", cascade="all, delete-orphan")
@@ -254,6 +275,9 @@ class Alarm(Base):
         Index('idx_alarm_status', 'status'),
         Index('idx_alarm_type', 'alarm_type'),
         Index('idx_alarm_severity', 'severity'),
+        Index('idx_alarm_fingerprint', 'alarm_fingerprint'),
+        Index('idx_alarm_mac', 'mac_address'),
+        Index('idx_alarm_last_occurrence', 'last_occurrence'),
     )
     
     def __repr__(self) -> str:
