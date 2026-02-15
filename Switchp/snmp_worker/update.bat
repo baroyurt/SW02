@@ -117,14 +117,15 @@ echo [%DATE% %TIME%] SQL migration'lari uygulanıyor >> "%LOG_FILE%"
 SET SQL_MIGRATIONS[0]=create_alarm_severity_config.sql
 SET SQL_MIGRATIONS[1]=add_mac_tracking_tables.sql
 SET SQL_MIGRATIONS[2]=add_acknowledged_port_mac_table.sql
-SET SQL_MIGRATIONS[3]=create_switch_change_log_view.sql
-SET SQL_MIGRATIONS[4]=mac_device_import.sql
-SET SQL_MIGRATIONS[5]=fix_status_enum_uppercase.sql
-SET SQL_MIGRATIONS[6]=fix_alarms_status_enum_uppercase.sql
-SET SQL_MIGRATIONS[7]=enable_description_change_notifications.sql
+SET SQL_MIGRATIONS[3]=add_port_config_columns.sql
+SET SQL_MIGRATIONS[4]=create_switch_change_log_view.sql
+SET SQL_MIGRATIONS[5]=mac_device_import.sql
+SET SQL_MIGRATIONS[6]=fix_status_enum_uppercase.sql
+SET SQL_MIGRATIONS[7]=fix_alarms_status_enum_uppercase.sql
+SET SQL_MIGRATIONS[8]=enable_description_change_notifications.sql
 
 SET SQL_COUNT=0
-FOR /L %%i IN (0,1,7) DO (
+FOR /L %%i IN (0,1,8) DO (
     IF DEFINED SQL_MIGRATIONS[%%i] (
         SET SQL_FILE=!SQL_MIGRATIONS[%%i]!
         IF EXIST "%MIGRATIONS_DIR%\!SQL_FILE!" (
@@ -239,17 +240,19 @@ echo.
 echo [6/6] Veritabani durumu kontrol ediliyor...
 echo [%DATE% %TIME%] Veritabani durumu kontrol ediliyor >> "%LOG_FILE%"
 
-:: Önemli tabloları kontrol et
-SET TABLES[0]=switches
-SET TABLES[1]=port_alarms
+:: Önemli tabloları kontrol et (snmp_devices yerine switches kullaniliyor)
+SET TABLES[0]=snmp_devices
+SET TABLES[1]=alarms
 SET TABLES[2]=port_status_data
 SET TABLES[3]=acknowledged_port_mac
 SET TABLES[4]=alarm_severity_config
+SET TABLES[5]=port_change_history
+SET TABLES[6]=mac_address_tracking
 
 SET TABLE_OK=0
 SET TABLE_MISSING=0
 
-FOR /L %%i IN (0,1,4) DO (
+FOR /L %%i IN (0,1,6) DO (
     IF DEFINED TABLES[%%i] (
         SET TABLE_NAME=!TABLES[%%i]!
         "%MYSQL_PATH%" -h %MYSQL_HOST% -u %MYSQL_USER% %MYSQL_DB% -e "DESCRIBE !TABLE_NAME!" > nul 2>&1
