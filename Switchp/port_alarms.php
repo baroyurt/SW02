@@ -637,20 +637,52 @@ $pageTitle = "Port Değişiklik Alarmları";
         let pendingAction = null;
         let autoRefreshInterval = null;
         
+        // Helper function to check if page is visible (with browser compatibility)
+        function isPageVisible() {
+            if (typeof document.visibilityState !== 'undefined') {
+                return document.visibilityState === 'visible';
+            }
+            if (typeof document.hidden !== 'undefined') {
+                return !document.hidden;
+            }
+            if (typeof document.webkitHidden !== 'undefined') {
+                return !document.webkitHidden;
+            }
+            if (typeof document.mozHidden !== 'undefined') {
+                return !document.mozHidden;
+            }
+            // Fallback: assume page is visible
+            return true;
+        }
+        
+        // Get the appropriate visibility change event name
+        function getVisibilityChangeEvent() {
+            if (typeof document.hidden !== 'undefined') {
+                return 'visibilitychange';
+            }
+            if (typeof document.webkitHidden !== 'undefined') {
+                return 'webkitvisibilitychange';
+            }
+            if (typeof document.mozHidden !== 'undefined') {
+                return 'mozvisibilitychange';
+            }
+            return 'visibilitychange';
+        }
+        
         // Load alarms on page load
         document.addEventListener('DOMContentLoaded', function() {
             loadAlarms();
             
             // Auto-refresh every 30 seconds, but only when page is visible
             autoRefreshInterval = setInterval(() => {
-                if (!document.hidden) {
+                if (isPageVisible()) {
                     loadAlarms();
                 }
             }, 30000);
             
             // Refresh when page becomes visible again
-            document.addEventListener('visibilitychange', function() {
-                if (!document.hidden) {
+            document.addEventListener(getVisibilityChangeEvent(), function() {
+                if (isPageVisible()) {
                     loadAlarms();
                 }
             });

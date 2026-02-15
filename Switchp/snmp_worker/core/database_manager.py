@@ -310,20 +310,46 @@ class DatabaseManager:
         
         # If there's an existing alarm, check if details are different
         if existing_alarm:
-            # Compare old_value and new_value to determine if this is a different change
+            # Normalize values for comparison
+            def normalize_value(val):
+                """Normalize value - treat None and empty string as equivalent"""
+                if val is None or val == '':
+                    return None
+                return str(val).strip()
+            
+            def normalize_mac(mac):
+                """Normalize MAC address - convert to uppercase and remove separators"""
+                if not mac:
+                    return None
+                return str(mac).upper().replace(':', '').replace('-', '').replace('.', '')
+            
+            # Normalize current values
+            curr_old = normalize_value(old_value)
+            curr_new = normalize_value(new_value)
+            curr_mac = normalize_mac(mac_address)
+            
+            # Normalize existing values
+            exist_old = normalize_value(existing_alarm.old_value)
+            exist_new = normalize_value(existing_alarm.new_value)
+            exist_mac = normalize_mac(existing_alarm.mac_address)
+            
+            # Check if details are different
             details_changed = False
             
-            # Check if both alarms have change details
-            if old_value is not None or new_value is not None or mac_address is not None:
-                # Check if the change details are different
-                if (old_value != existing_alarm.old_value or 
-                    new_value != existing_alarm.new_value or
-                    mac_address != existing_alarm.mac_address):
+            # Only compare details if at least one alarm has details to compare
+            has_current_details = curr_old is not None or curr_new is not None or curr_mac is not None
+            has_existing_details = exist_old is not None or exist_new is not None or exist_mac is not None
+            
+            if has_current_details or has_existing_details:
+                # Check if any detail is different
+                if (curr_old != exist_old or 
+                    curr_new != exist_new or
+                    curr_mac != exist_mac):
                     details_changed = True
                     self.logger.info(
                         f"Creating new alarm - details changed: "
-                        f"Old: ({existing_alarm.old_value} -> {existing_alarm.new_value}, MAC: {existing_alarm.mac_address}), "
-                        f"New: ({old_value} -> {new_value}, MAC: {mac_address})"
+                        f"Old: ({exist_old} -> {exist_new}, MAC: {exist_mac}), "
+                        f"New: ({curr_old} -> {curr_new}, MAC: {curr_mac})"
                     )
             
             if not details_changed:
