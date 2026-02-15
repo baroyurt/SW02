@@ -1564,49 +1564,19 @@ header("Expires: 0");
             </button>
         </div>
         
-        <?php if ($currentUser['role'] === 'admin'): ?>
         <div class="nav-section">
-            <div class="nav-title">Yönetim</div>
-            <button class="nav-item" id="nav-add-switch">
-                <i class="fas fa-plus-circle"></i>
-                <span>Yeni Switch</span>
-            </button>
-            <button class="nav-item" id="nav-add-rack">
-                <i class="fas fa-cube"></i>
-                <span>Yeni Rack</span>
-            </button>
-            <button class="nav-item" id="nav-add-panel">
-                <i class="fas fa-th-large"></i>
-                <span>Yeni Patch Panel</span>
-            </button>
-            <button class="nav-item" id="nav-backup">
-                <i class="fas fa-database"></i>
-                <span>Yedekleme</span>
+            <div class="nav-title">SNMP Admin</div>
+            <button class="nav-item" id="nav-snmp-admin" onclick="window.open('snmp_admin.php', '_blank')" style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3);">
+                <i class="fas fa-cogs"></i>
+                <span>SNMP Admin Panel</span>
             </button>
         </div>
-        
-        <div class="nav-section">
-            <div class="nav-title">Veri İşlemleri</div>
-            <button class="nav-item" id="nav-export">
-                <i class="fas fa-file-export"></i>
-                <span>Excel Export</span>
-            </button>
-            <button class="nav-item" id="nav-history">
-                <i class="fas fa-history"></i>
-                <span>Geçmiş Yedekler</span>
-            </button>
-        </div>
-        <?php endif; ?>
         
         <div class="nav-section">
             <div class="nav-title">SNMP Veri Senkronizasyonu</div>
             <button class="nav-item" id="nav-snmp-sync">
                 <i class="fas fa-sync-alt"></i>
                 <span>SNMP Verilerini Görüntüle</span>
-            </button>
-            <button class="nav-item" id="nav-snmp-admin" onclick="window.open('snmp_admin.php', '_blank')" style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3);">
-                <i class="fas fa-cogs"></i>
-                <span>SNMP Admin Panel</span>
             </button>
         </div>
         
@@ -1625,28 +1595,6 @@ header("Expires: 0");
                 <i class="fas fa-sign-out-alt"></i>
                 <span>Çıkış Yap</span>
             </button>
-        </div>
-        
-        <div class="nav-section">
-            <div class="nav-title">İstatistikler</div>
-            <div style="padding: 15px; background: rgba(15, 23, 42, 0.5); border-radius: 10px; margin-bottom: 10px;">
-                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                    <span style="color: var(--text-light);">Toplam Switch:</span>
-                    <span style="color: var(--text);" id="sidebar-total-switches">0</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                    <span style="color: var(--text-light);">Aktif Port:</span>
-                    <span style="color: var(--text);" id="sidebar-active-ports">0</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                    <span style="color: var(--text-light);">Patch Panel:</span>
-                    <span style="color: var(--text);" id="sidebar-total-panels">0</span>
-                </div>
-                <div style="display: flex; justify-content: space-between;">
-                    <span style="color: var(--text-light);">Son Yedek:</span>
-                    <span style="color: var(--text);" id="sidebar-last-backup">-</span>
-                </div>
-            </div>
         </div>
     </div>
     
@@ -4792,30 +4740,8 @@ function confirmDeleteRack(rackId) {
                     ).length;
                 });
                 
-                // Sidebar elementlerini güncelle
-                const sidebarElements = {
-                    'sidebar-total-switches': totalSwitches,
-                    'sidebar-active-ports': activePorts,
-                    'sidebar-total-panels': totalPanels
-                };
-                
-                for (const [id, value] of Object.entries(sidebarElements)) {
-                    const element = document.getElementById(id);
-                    if (element) {
-                        element.textContent = value;
-                    } else {
-                        console.warn(`Sidebar element #${id} bulunamadı`);
-                    }
-                }
-                
-                if (lastBackupTime) {
-                    const time = new Date(lastBackupTime);
-                    const lastBackupElement = document.getElementById('sidebar-last-backup');
-                    if (lastBackupElement) {
-                        lastBackupElement.textContent = 
-                            `${time.getHours().toString().padStart(2, '0')}:${time.getMinutes().toString().padStart(2, '0')}`;
-                    }
-                }
+                // Sidebar statistics removed - no longer updating
+                // Previously updated: sidebar-total-switches, sidebar-active-ports, sidebar-total-panels, sidebar-last-backup
                 
             } catch (error) {
                 console.error('updateSidebarStats hatası:', error);
