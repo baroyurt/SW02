@@ -36,9 +36,24 @@ $pageTitle = "Port Değişiklik Alarmları";
     <link rel="stylesheet" href="style.css?v=<?php echo time(); ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
+        :root {
+            --primary: #3b82f6;
+            --primary-dark: #2563eb;
+            --secondary: #8b5cf6;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --dark: #0f172a;
+            --dark-light: #1e293b;
+            --text: #e2e8f0;
+            --text-light: #94a3b8;
+            --border: #334155;
+        }
+        
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            color: var(--text);
             margin: 0;
             padding: 0;
             min-height: 100vh;
@@ -51,26 +66,27 @@ $pageTitle = "Port Değişiklik Alarmları";
         }
         
         .page-header {
-            background: white;
+            background: var(--dark-light);
             border-radius: 10px;
             padding: 25px;
             margin-bottom: 20px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
             display: flex;
             justify-content: space-between;
             align-items: center;
+            border: 1px solid var(--border);
         }
         
         .page-header h1 {
             margin: 0;
-            color: #333;
+            color: var(--text);
             display: flex;
             align-items: center;
             gap: 15px;
         }
         
         .page-header h1 i {
-            color: #f59e0b;
+            color: var(--warning);
         }
         
         .header-actions {
@@ -92,29 +108,80 @@ $pageTitle = "Port Değişiklik Alarmları";
         }
         
         .btn-primary {
-            background: #3498db;
+            background: var(--primary);
             color: white;
         }
         
         .btn-primary:hover {
-            background: #2980b9;
+            background: var(--primary-dark);
         }
         
         .btn-secondary {
-            background: #95a5a6;
-            color: white;
+            background: var(--dark-light);
+            color: var(--text);
+            border: 1px solid var(--border);
         }
         
         .btn-secondary:hover {
-            background: #7f8c8d;
+            background: var(--dark);
+        }
+        
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+        
+        .btn-success:hover {
+            background: #059669;
+        }
+        
+        .btn-success:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
         }
         
         .filter-bar {
-            background: white;
+            background: var(--dark-light);
             border-radius: 10px;
             padding: 20px;
             margin-bottom: 20px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            border: 1px solid var(--border);
+        }
+        
+        .bulk-actions-bar {
+            background: var(--dark-light);
+            border-radius: 10px;
+            padding: 15px 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            border: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .bulk-actions-left {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .checkbox-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .checkbox-wrapper input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+        
+        .selected-count {
+            color: var(--text-light);
+            font-size: 14px;
         }
         
         .filter-buttons {
@@ -125,8 +192,8 @@ $pageTitle = "Port Değişiklik Alarmları";
         
         .filter-btn {
             padding: 10px 20px;
-            border: 2px solid #e0e0e0;
-            background: white;
+            border: 2px solid var(--border);
+            background: var(--dark);
             border-radius: 5px;
             cursor: pointer;
             font-size: 14px;
@@ -134,45 +201,66 @@ $pageTitle = "Port Değişiklik Alarmları";
             align-items: center;
             gap: 8px;
             transition: all 0.3s;
+            color: var(--text);
         }
         
         .filter-btn:hover {
-            border-color: #3498db;
-            background: #ecf0f1;
+            border-color: var(--primary);
+            background: var(--dark-light);
         }
         
         .filter-btn.active {
-            background: #3498db;
+            background: var(--primary);
             color: white;
-            border-color: #3498db;
+            border-color: var(--primary);
         }
         
         .alarms-list {
-            background: white;
+            background: var(--dark-light);
             border-radius: 10px;
             padding: 20px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            border: 1px solid var(--border);
         }
         
         .alarm-item {
-            border: 2px solid #e0e0e0;
+            border: 2px solid var(--border);
             border-radius: 8px;
             padding: 20px;
             margin-bottom: 15px;
             transition: all 0.3s;
+            background: var(--dark);
+            display: flex;
+            gap: 15px;
+        }
+        
+        .alarm-checkbox {
+            display: flex;
+            align-items: flex-start;
+            padding-top: 5px;
+        }
+        
+        .alarm-checkbox input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+        
+        .alarm-content {
+            flex: 1;
         }
         
         .alarm-item:hover {
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            border-color: #3498db;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            border-color: var(--primary);
         }
         
         .alarm-item.critical {
-            border-left: 5px solid #ef4444;
+            border-left: 5px solid var(--danger);
         }
         
         .alarm-item.high {
-            border-left: 5px solid #f59e0b;
+            border-left: 5px solid var(--warning);
         }
         
         .alarm-item.medium {
@@ -180,12 +268,17 @@ $pageTitle = "Port Değişiklik Alarmları";
         }
         
         .alarm-item.low {
-            border-left: 5px solid #10b981;
+            border-left: 5px solid var(--success);
         }
         
         .alarm-item.silenced {
             opacity: 0.7;
-            background: #f9fafb;
+            background: rgba(15, 23, 42, 0.5);
+        }
+        
+        .alarm-item.selected {
+            border-color: var(--primary);
+            background: rgba(59, 130, 246, 0.1);
         }
         
         .alarm-header {
@@ -198,7 +291,7 @@ $pageTitle = "Port Değişiklik Alarmları";
         .alarm-title {
             font-size: 18px;
             font-weight: 600;
-            color: #333;
+            color: var(--text);
             display: flex;
             align-items: center;
             gap: 10px;
@@ -206,7 +299,7 @@ $pageTitle = "Port Değişiklik Alarmları";
         }
         
         .alarm-title:hover {
-            color: #3498db;
+            color: var(--primary);
         }
         
         .alarm-severity {
@@ -218,33 +311,33 @@ $pageTitle = "Port Değişiklik Alarmları";
         }
         
         .alarm-severity.critical {
-            background: #ef4444;
+            background: var(--danger);
             color: white;
         }
         
         .alarm-severity.high {
-            background: #f59e0b;
+            background: var(--warning);
             color: white;
         }
         
         .alarm-severity.medium {
             background: #fbbf24;
-            color: #333;
+            color: var(--dark);
         }
         
         .alarm-severity.low {
-            background: #10b981;
+            background: var(--success);
             color: white;
         }
         
         .alarm-message {
-            color: #555;
+            color: var(--text-light);
             margin-bottom: 12px;
             line-height: 1.6;
         }
         
         .alarm-change-details {
-            background: rgba(0,0,0,0.05);
+            background: rgba(0,0,0,0.3);
             border-radius: 5px;
             padding: 12px;
             margin-bottom: 12px;
@@ -261,19 +354,19 @@ $pageTitle = "Port Değişiklik Alarmları";
         }
         
         .change-old {
-            background: #fee2e2;
-            color: #dc2626;
+            background: rgba(220, 38, 38, 0.2);
+            color: #fca5a5;
         }
         
         .change-new {
-            background: #d1fae5;
-            color: #059669;
+            background: rgba(5, 150, 105, 0.2);
+            color: #6ee7b7;
         }
         
         .alarm-meta {
             display: flex;
             gap: 20px;
-            color: #888;
+            color: var(--text-light);
             font-size: 14px;
             margin-bottom: 12px;
         }
@@ -295,13 +388,13 @@ $pageTitle = "Port Değişiklik Alarmları";
         }
         
         .alarm-status-badge.silenced {
-            background: rgba(255, 193, 7, 0.2);
-            color: #f59e0b;
+            background: rgba(245, 158, 11, 0.2);
+            color: var(--warning);
         }
         
         .alarm-status-badge.acknowledged {
-            background: rgba(40, 167, 69, 0.2);
-            color: #059669;
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--success);
         }
         
         .alarm-actions {
@@ -316,12 +409,12 @@ $pageTitle = "Port Değişiklik Alarmları";
         }
         
         .btn-acknowledge {
-            background: #3498db;
+            background: var(--primary);
             color: white;
         }
         
         .btn-acknowledge:hover {
-            background: #2980b9;
+            background: var(--primary-dark);
         }
         
         .btn-silence {
@@ -334,29 +427,30 @@ $pageTitle = "Port Değişiklik Alarmları";
         }
         
         .btn-details {
-            background: #95a5a6;
-            color: white;
+            background: var(--dark-light);
+            color: var(--text);
+            border: 1px solid var(--border);
         }
         
         .btn-details:hover {
-            background: #7f8c8d;
+            background: var(--dark);
         }
         
         .empty-state {
             text-align: center;
             padding: 60px 20px;
-            color: #888;
+            color: var(--text-light);
         }
         
         .empty-state i {
             font-size: 64px;
-            color: #059669;
+            color: var(--success);
             margin-bottom: 20px;
         }
         
         .empty-state h3 {
             font-size: 24px;
-            color: #333;
+            color: var(--text);
             margin-bottom: 10px;
         }
         
@@ -367,12 +461,12 @@ $pageTitle = "Port Değişiklik Alarmları";
         .loading-state {
             text-align: center;
             padding: 60px 20px;
-            color: #888;
+            color: var(--text-light);
         }
         
         .loading-state i {
             font-size: 48px;
-            color: #3498db;
+            color: var(--primary);
             margin-bottom: 20px;
         }
         
@@ -384,7 +478,7 @@ $pageTitle = "Port Değişiklik Alarmları";
             left: 0;
             right: 0;
             bottom: 0;
-            background: rgba(0, 0, 0, 0.5);
+            background: rgba(0, 0, 0, 0.7);
             z-index: 9999;
             align-items: center;
             justify-content: center;
@@ -395,18 +489,19 @@ $pageTitle = "Port Değişiklik Alarmları";
         }
         
         .modal {
-            background: white;
+            background: var(--dark-light);
             border-radius: 10px;
             max-width: 500px;
             width: 90%;
             max-height: 90vh;
             overflow-y: auto;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+            border: 1px solid var(--border);
         }
         
         .modal-header {
             padding: 20px;
-            border-bottom: 1px solid #e0e0e0;
+            border-bottom: 1px solid var(--border);
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -415,7 +510,7 @@ $pageTitle = "Port Değişiklik Alarmları";
         .modal-title {
             font-size: 20px;
             font-weight: 600;
-            color: #333;
+            color: var(--text);
             display: flex;
             align-items: center;
             gap: 10px;
@@ -426,7 +521,7 @@ $pageTitle = "Port Değişiklik Alarmları";
             border: none;
             font-size: 24px;
             cursor: pointer;
-            color: #888;
+            color: var(--text-light);
             padding: 0;
             width: 30px;
             height: 30px;
@@ -437,8 +532,8 @@ $pageTitle = "Port Değişiklik Alarmları";
         }
         
         .modal-close:hover {
-            background: #f0f0f0;
-            color: #333;
+            background: var(--dark);
+            color: var(--text);
         }
         
         .modal-body {
@@ -447,7 +542,7 @@ $pageTitle = "Port Değişiklik Alarmları";
         
         .modal-footer {
             padding: 20px;
-            border-top: 1px solid #e0e0e0;
+            border-top: 1px solid var(--border);
             display: flex;
             justify-content: flex-end;
             gap: 10px;
@@ -460,7 +555,7 @@ $pageTitle = "Port Değişiklik Alarmları";
         .form-group label {
             display: block;
             margin-bottom: 8px;
-            color: #333;
+            color: var(--text);
             font-weight: 500;
         }
         
@@ -468,15 +563,17 @@ $pageTitle = "Port Değişiklik Alarmları";
         .form-group select {
             width: 100%;
             padding: 10px;
-            border: 2px solid #e0e0e0;
+            border: 2px solid var(--border);
             border-radius: 5px;
             font-size: 14px;
+            background: var(--dark);
+            color: var(--text);
         }
         
         .form-group input:focus,
         .form-group select:focus {
             outline: none;
-            border-color: #3498db;
+            border-color: var(--primary);
         }
         
         .toast {
@@ -554,6 +651,20 @@ $pageTitle = "Port Değişiklik Alarmları";
                     <span class="badge" id="badge-description_changed">0</span>
                 </button>
             </div>
+        </div>
+        
+        <!-- Bulk Actions Bar -->
+        <div class="bulk-actions-bar" id="bulk-actions-bar" style="display: none;">
+            <div class="bulk-actions-left">
+                <div class="checkbox-wrapper">
+                    <input type="checkbox" id="select-all-checkbox" onchange="toggleSelectAll(this.checked)">
+                    <label for="select-all-checkbox" style="margin: 0; cursor: pointer; color: var(--text);">Tümünü Seç</label>
+                </div>
+                <span class="selected-count" id="selected-count">0 alarm seçildi</span>
+            </div>
+            <button class="btn btn-success" id="bulk-acknowledge-btn" onclick="bulkAcknowledgeAlarms()" disabled>
+                <i class="fas fa-check"></i> Seçilenleri Bilgi Dahilinde Kapat
+            </button>
         </div>
         
         <div class="alarms-list" id="alarms-list">
@@ -635,7 +746,9 @@ $pageTitle = "Port Değişiklik Alarmları";
         let currentFilter = 'all';
         let allAlarms = [];
         let pendingAction = null;
+        let selectedAlarmIds = new Set();
         let autoRefreshInterval = null;
+        let realTimeUpdateInterval = null;
         
         // Helper function to check if page is visible (with browser compatibility)
         function isPageVisible() {
@@ -673,12 +786,12 @@ $pageTitle = "Port Değişiklik Alarmları";
         document.addEventListener('DOMContentLoaded', function() {
             loadAlarms();
             
-            // Auto-refresh every 30 seconds, but only when page is visible
+            // Real-time auto-refresh every 10 seconds (more frequent for real-time feel), but only when page is visible
             autoRefreshInterval = setInterval(() => {
                 if (isPageVisible()) {
                     loadAlarms();
                 }
-            }, 30000);
+            }, 10000); // Changed from 30000 to 10000 for real-time updates
             
             // Refresh when page becomes visible again
             document.addEventListener(getVisibilityChangeEvent(), function() {
@@ -772,68 +885,77 @@ $pageTitle = "Port Değişiklik Alarmları";
                 const severityClass = alarm.severity.toLowerCase();
                 const isSilenced = alarm.is_silenced == 1;
                 const isAcknowledged = alarm.acknowledged_at != null;
+                const isSelected = selectedAlarmIds.has(alarm.id);
                 
                 html += `
-                    <div class="alarm-item ${severityClass} ${isSilenced ? 'silenced' : ''}" data-alarm-id="${alarm.id}">
-                        <div class="alarm-header">
-                            <div class="alarm-title" onclick="navigateToPort(${alarm.device_id}, ${alarm.port_number || 0}, '${escapeHtml(alarm.device_name)}', '${escapeHtml(alarm.device_ip || '')}')">
-                                <i class="fas fa-network-wired"></i>
-                                ${escapeHtml(alarm.device_name)}${alarm.port_number ? ' - Port ' + alarm.port_number : ''}
-                            </div>
-                            <span class="alarm-severity ${severityClass}">${alarm.severity}</span>
-                        </div>
-                        
-                        <div class="alarm-message">${escapeHtml(alarm.message)}</div>
-                        
-                        ${alarm.old_value && alarm.new_value ? `
-                            <div class="alarm-change-details">
-                                <span class="change-value change-old">${escapeHtml(alarm.old_value)}</span>
-                                <i class="fas fa-arrow-right"></i>
-                                <span class="change-value change-new">${escapeHtml(alarm.new_value)}</span>
-                            </div>
-                        ` : ''}
-                        
-                        <div class="alarm-meta">
-                            <span><i class="fas fa-clock"></i> ${formatDate(alarm.last_occurrence)}</span>
-                            ${alarm.occurrence_count > 1 ? `<span><i class="fas fa-redo"></i> ${alarm.occurrence_count} kez</span>` : ''}
-                        </div>
-                        
-                        ${isSilenced ? `
-                            <div class="alarm-status-badge silenced">
-                                <i class="fas fa-volume-mute"></i> Sesize alındı
-                            </div>
-                        ` : ''}
-                        
-                        ${isAcknowledged ? `
-                            <div class="alarm-status-badge acknowledged">
-                                <i class="fas fa-check"></i> Bilgi dahilinde
-                            </div>
-                        ` : ''}
-                        
+                    <div class="alarm-item ${severityClass} ${isSilenced ? 'silenced' : ''} ${isSelected ? 'selected' : ''}" data-alarm-id="${alarm.id}">
                         ${!isAcknowledged ? `
-                            <div class="alarm-actions">
-                                <button class="btn btn-sm btn-acknowledge" onclick="acknowledgeAlarm(${alarm.id})">
-                                    <i class="fas fa-check"></i> Bilgi Dahilinde Kapat
-                                </button>
-                                <button class="btn btn-sm btn-silence" onclick="silenceAlarm(${alarm.id})">
-                                    <i class="fas fa-volume-mute"></i> Sesize Al
-                                </button>
-                                <button class="btn btn-sm btn-details" onclick="showAlarmDetails(${alarm.id})">
-                                    <i class="fas fa-info-circle"></i> Detaylar
-                                </button>
+                        <div class="alarm-checkbox">
+                            <input type="checkbox" class="alarm-select-checkbox" data-alarm-id="${alarm.id}" ${isSelected ? 'checked' : ''} onchange="toggleAlarmSelection(${alarm.id}, this.checked)">
+                        </div>
+                        ` : ''}
+                        <div class="alarm-content">
+                            <div class="alarm-header">
+                                <div class="alarm-title" onclick="navigateToPort(${alarm.device_id}, ${alarm.port_number || 0}, '${escapeHtml(alarm.device_name)}', '${escapeHtml(alarm.device_ip || '')}')">
+                                    <i class="fas fa-network-wired"></i>
+                                    ${escapeHtml(alarm.device_name)}${alarm.port_number ? ' - Port ' + alarm.port_number : ''}
+                                </div>
+                                <span class="alarm-severity ${severityClass}">${alarm.severity}</span>
                             </div>
-                        ` : `
-                            <div class="alarm-actions">
-                                <button class="btn btn-sm btn-details" onclick="showAlarmDetails(${alarm.id})">
-                                    <i class="fas fa-info-circle"></i> Detaylar
-                                </button>
+                            
+                            <div class="alarm-message">${escapeHtml(alarm.message)}</div>
+                            
+                            ${alarm.old_value && alarm.new_value ? `
+                                <div class="alarm-change-details">
+                                    <span class="change-value change-old">${escapeHtml(alarm.old_value)}</span>
+                                    <i class="fas fa-arrow-right"></i>
+                                    <span class="change-value change-new">${escapeHtml(alarm.new_value)}</span>
+                                </div>
+                            ` : ''}
+                            
+                            <div class="alarm-meta">
+                                <span><i class="fas fa-clock"></i> ${formatDate(alarm.last_occurrence)}</span>
+                                ${alarm.occurrence_count > 1 ? `<span><i class="fas fa-redo"></i> ${alarm.occurrence_count} kez</span>` : ''}
                             </div>
-                        `}
+                            
+                            ${isSilenced ? `
+                                <div class="alarm-status-badge silenced">
+                                    <i class="fas fa-volume-mute"></i> Sesize alındı
+                                </div>
+                            ` : ''}
+                            
+                            ${isAcknowledged ? `
+                                <div class="alarm-status-badge acknowledged">
+                                    <i class="fas fa-check"></i> Bilgi dahilinde
+                                </div>
+                            ` : ''}
+                            
+                            ${!isAcknowledged ? `
+                                <div class="alarm-actions">
+                                    <button class="btn btn-sm btn-acknowledge" onclick="acknowledgeAlarm(${alarm.id})">
+                                        <i class="fas fa-check"></i> Bilgi Dahilinde Kapat
+                                    </button>
+                                    <button class="btn btn-sm btn-silence" onclick="silenceAlarm(${alarm.id})">
+                                        <i class="fas fa-volume-mute"></i> Sesize Al
+                                    </button>
+                                    <button class="btn btn-sm btn-details" onclick="showAlarmDetails(${alarm.id})">
+                                        <i class="fas fa-info-circle"></i> Detaylar
+                                    </button>
+                                </div>
+                            ` : `
+                                <div class="alarm-actions">
+                                    <button class="btn btn-sm btn-details" onclick="showAlarmDetails(${alarm.id})">
+                                        <i class="fas fa-info-circle"></i> Detaylar
+                                    </button>
+                                </div>
+                            `}
+                        </div>
                     </div>
                 `;
             });
             
             container.innerHTML = html;
+            updateBulkActionsBar();
         }
         
         function acknowledgeAlarm(alarmId) {
@@ -915,6 +1037,135 @@ $pageTitle = "Port Değişiklik Alarmları";
         
         function closeDetailsModal() {
             document.getElementById('details-modal').classList.remove('active');
+        }
+        
+        // Bulk selection functions
+        function toggleAlarmSelection(alarmId, isChecked) {
+            if (isChecked) {
+                selectedAlarmIds.add(alarmId);
+            } else {
+                selectedAlarmIds.delete(alarmId);
+            }
+            updateBulkActionsBar();
+            updateAlarmItemSelection(alarmId, isChecked);
+        }
+        
+        function toggleSelectAll(isChecked) {
+            selectedAlarmIds.clear();
+            
+            if (isChecked) {
+                // Select all unacknowledged alarms in current view
+                const checkboxes = document.querySelectorAll('.alarm-select-checkbox');
+                checkboxes.forEach(checkbox => {
+                    const alarmId = parseInt(checkbox.dataset.alarmId);
+                    selectedAlarmIds.add(alarmId);
+                    checkbox.checked = true;
+                });
+            } else {
+                // Deselect all
+                const checkboxes = document.querySelectorAll('.alarm-select-checkbox');
+                checkboxes.forEach(checkbox => {
+                    checkbox.checked = false;
+                });
+            }
+            
+            updateBulkActionsBar();
+            updateAllAlarmItemsSelection();
+        }
+        
+        function updateBulkActionsBar() {
+            const bulkActionsBar = document.getElementById('bulk-actions-bar');
+            const selectedCount = document.getElementById('selected-count');
+            const bulkAcknowledgeBtn = document.getElementById('bulk-acknowledge-btn');
+            const selectAllCheckbox = document.getElementById('select-all-checkbox');
+            
+            const count = selectedAlarmIds.size;
+            
+            if (count > 0) {
+                bulkActionsBar.style.display = 'flex';
+                selectedCount.textContent = `${count} alarm seçildi`;
+                bulkAcknowledgeBtn.disabled = false;
+            } else {
+                bulkActionsBar.style.display = 'none';
+                bulkAcknowledgeBtn.disabled = true;
+            }
+            
+            // Update select all checkbox state
+            const totalCheckboxes = document.querySelectorAll('.alarm-select-checkbox').length;
+            if (totalCheckboxes > 0) {
+                selectAllCheckbox.checked = count === totalCheckboxes;
+                selectAllCheckbox.indeterminate = count > 0 && count < totalCheckboxes;
+            } else {
+                selectAllCheckbox.checked = false;
+                selectAllCheckbox.indeterminate = false;
+            }
+        }
+        
+        function updateAlarmItemSelection(alarmId, isSelected) {
+            const alarmItem = document.querySelector(`.alarm-item[data-alarm-id="${alarmId}"]`);
+            if (alarmItem) {
+                if (isSelected) {
+                    alarmItem.classList.add('selected');
+                } else {
+                    alarmItem.classList.remove('selected');
+                }
+            }
+        }
+        
+        function updateAllAlarmItemsSelection() {
+            document.querySelectorAll('.alarm-item').forEach(item => {
+                const alarmId = parseInt(item.dataset.alarmId);
+                if (selectedAlarmIds.has(alarmId)) {
+                    item.classList.add('selected');
+                } else {
+                    item.classList.remove('selected');
+                }
+            });
+        }
+        
+        async function bulkAcknowledgeAlarms() {
+            if (selectedAlarmIds.size === 0) return;
+            
+            if (!confirm(`${selectedAlarmIds.size} alarmı bilgi dahilinde kapatmak istediğinizden emin misiniz?`)) {
+                return;
+            }
+            
+            const alarmIds = Array.from(selectedAlarmIds);
+            let successCount = 0;
+            let errorCount = 0;
+            
+            // Show progress
+            showToast(`${alarmIds.length} alarm kapatılıyor...`, 'info');
+            
+            // Acknowledge all selected alarms
+            for (const alarmId of alarmIds) {
+                try {
+                    const response = await fetch(`port_change_api.php?action=acknowledge_alarm&alarm_id=${alarmId}&ack_type=known_change`);
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        successCount++;
+                    } else {
+                        errorCount++;
+                    }
+                } catch (error) {
+                    console.error(`Error acknowledging alarm ${alarmId}:`, error);
+                    errorCount++;
+                }
+            }
+            
+            // Clear selection
+            selectedAlarmIds.clear();
+            
+            // Reload alarms
+            await loadAlarms();
+            
+            // Show result
+            if (errorCount === 0) {
+                showToast(`${successCount} alarm başarıyla kapatıldı`, 'success');
+            } else {
+                showToast(`${successCount} alarm kapatıldı, ${errorCount} başarısız`, 'error');
+            }
         }
         
         async function showAlarmDetails(alarmId) {
