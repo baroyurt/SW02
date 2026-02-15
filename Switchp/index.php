@@ -7531,20 +7531,9 @@ document.getElementById('rack-form').addEventListener('submit', async function(e
                 }
             };
             
-            // Setup alarm modal
+            // Setup alarm navigation - redirect to dedicated page
             document.getElementById('nav-port-alarms')?.addEventListener('click', function() {
-                document.getElementById('port-alarms-modal').classList.add('active');
-                loadPortAlarms(currentAlarmFilter);
-            });
-            
-            document.getElementById('close-alarms-modal')?.addEventListener('click', function() {
-                document.getElementById('port-alarms-modal').classList.remove('active');
-            });
-            
-            document.getElementById('port-alarms-modal')?.addEventListener('click', function(e) {
-                if (e.target === this) {
-                    this.classList.remove('active');
-                }
+                window.location.href = 'port_alarms.php';
             });
             
             // Alarm action functions for index page - GLOBAL SCOPE
