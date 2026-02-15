@@ -179,9 +179,10 @@ $pageTitle = "Port Değişiklik Alarmları";
             cursor: pointer;
         }
         
-        .selected-count {
-            color: var(--text-light);
-            font-size: 14px;
+        .bulk-select-label {
+            margin: 0;
+            cursor: pointer;
+            color: var(--text);
         }
         
         .filter-buttons {
@@ -658,7 +659,7 @@ $pageTitle = "Port Değişiklik Alarmları";
             <div class="bulk-actions-left">
                 <div class="checkbox-wrapper">
                     <input type="checkbox" id="select-all-checkbox" onchange="toggleSelectAll(this.checked)">
-                    <label for="select-all-checkbox" style="margin: 0; cursor: pointer; color: var(--text);">Tümünü Seç</label>
+                    <label for="select-all-checkbox" class="bulk-select-label">Tümünü Seç</label>
                 </div>
                 <span class="selected-count" id="selected-count">0 alarm seçildi</span>
             </div>
@@ -786,12 +787,12 @@ $pageTitle = "Port Değişiklik Alarmları";
         document.addEventListener('DOMContentLoaded', function() {
             loadAlarms();
             
-            // Real-time auto-refresh every 10 seconds (more frequent for real-time feel), but only when page is visible
+            // Real-time updates: Poll every 10 seconds for responsive alarm monitoring
             autoRefreshInterval = setInterval(() => {
                 if (isPageVisible()) {
                     loadAlarms();
                 }
-            }, 10000); // Changed from 30000 to 10000 for real-time updates
+            }, 10000);
             
             // Refresh when page becomes visible again
             document.addEventListener(getVisibilityChangeEvent(), function() {
@@ -1053,9 +1054,11 @@ $pageTitle = "Port Değişiklik Alarmları";
         function toggleSelectAll(isChecked) {
             selectedAlarmIds.clear();
             
+            // Get all checkboxes once
+            const checkboxes = document.querySelectorAll('.alarm-select-checkbox');
+            
             if (isChecked) {
                 // Select all unacknowledged alarms in current view
-                const checkboxes = document.querySelectorAll('.alarm-select-checkbox');
                 checkboxes.forEach(checkbox => {
                     const alarmId = parseInt(checkbox.dataset.alarmId);
                     selectedAlarmIds.add(alarmId);
@@ -1063,7 +1066,6 @@ $pageTitle = "Port Değişiklik Alarmları";
                 });
             } else {
                 // Deselect all
-                const checkboxes = document.querySelectorAll('.alarm-select-checkbox');
                 checkboxes.forEach(checkbox => {
                     checkbox.checked = false;
                 });
@@ -1131,28 +1133,24 @@ $pageTitle = "Port Değişiklik Alarmları";
             }
             
             const alarmIds = Array.from(selectedAlarmIds);
-            let successCount = 0;
-            let errorCount = 0;
             
             // Show progress
             showToast(`${alarmIds.length} alarm kapatılıyor...`, 'info');
             
-            // Acknowledge all selected alarms
-            for (const alarmId of alarmIds) {
-                try {
-                    const response = await fetch(`port_change_api.php?action=acknowledge_alarm&alarm_id=${alarmId}&ack_type=known_change`);
-                    const data = await response.json();
-                    
-                    if (data.success) {
-                        successCount++;
-                    } else {
-                        errorCount++;
-                    }
-                } catch (error) {
-                    console.error(`Error acknowledging alarm ${alarmId}:`, error);
-                    errorCount++;
-                }
-            }
+            // Acknowledge all selected alarms in parallel for better performance
+            const promises = alarmIds.map(alarmId => 
+                fetch(`port_change_api.php?action=acknowledge_alarm&alarm_id=${alarmId}&ack_type=known_change`)
+                    .then(response => response.json())
+                    .then(data => ({ success: data.success, alarmId }))
+                    .catch(error => {
+                        console.error(`Error acknowledging alarm ${alarmId}:`, error);
+                        return { success: false, alarmId };
+                    })
+            );
+            
+            const results = await Promise.all(promises);
+            const successCount = results.filter(r => r.success).length;
+            const errorCount = results.length - successCount;
             
             // Clear selection
             selectedAlarmIds.clear();
