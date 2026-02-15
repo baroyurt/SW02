@@ -6643,6 +6643,66 @@ jsonData.forEach(row => {
             
             await loadData();
             
+            // Handle URL parameters for port navigation from port_alarms.php
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('highlight_port') === 'true') {
+                const deviceName = urlParams.get('device_name');
+                const deviceIp = urlParams.get('device_ip');
+                const portNumber = parseInt(urlParams.get('port_number'));
+                
+                console.log('Port navigation requested:', { deviceName, deviceIp, portNumber });
+                
+                // Find the switch by name or IP
+                let targetSwitch = null;
+                if (deviceName) {
+                    targetSwitch = switches.find(s => s.name === deviceName);
+                }
+                if (!targetSwitch && deviceIp) {
+                    targetSwitch = switches.find(s => s.ip === deviceIp);
+                }
+                
+                if (targetSwitch && portNumber) {
+                    // Show the switch detail
+                    showSwitchDetail(targetSwitch);
+                    
+                    // Wait for the detail panel to render, then highlight the port
+                    setTimeout(() => {
+                        const portElement = document.querySelector(`.port-item[data-port="${portNumber}"]`);
+                        if (portElement) {
+                            // Highlight port with red/orange emphasis
+                            portElement.style.borderColor = '#ef4444';
+                            portElement.style.borderWidth = '3px';
+                            portElement.style.boxShadow = '0 0 25px #ef4444';
+                            portElement.style.backgroundColor = '#fee2e2';
+                            portElement.style.transform = 'scale(1.05)';
+                            
+                            // Scroll to the port
+                            portElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            
+                            // Show a toast notification
+                            showToast(`${targetSwitch.name} - Port ${portNumber} vurgulandı`, 'success');
+                            
+                            // Remove highlight after 10 seconds
+                            setTimeout(() => {
+                                portElement.style.borderColor = '';
+                                portElement.style.borderWidth = '';
+                                portElement.style.boxShadow = '';
+                                portElement.style.backgroundColor = '';
+                                portElement.style.transform = '';
+                            }, 10000);
+                        } else {
+                            showToast(`Port ${portNumber} bulunamadı`, 'warning');
+                        }
+                    }, 500);
+                } else if (!targetSwitch) {
+                    showToast(`Switch bulunamadı: ${deviceName || deviceIp}`, 'error');
+                    console.warn('Switch not found. Searched for:', { deviceName, deviceIp, switches });
+                }
+                
+                // Clean up URL to remove parameters
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }
+            
             // Sidebar toggle
             sidebarToggle.addEventListener('click', () => {
                 sidebar.classList.toggle('active');
@@ -7531,20 +7591,9 @@ document.getElementById('rack-form').addEventListener('submit', async function(e
                 }
             };
             
-            // Setup alarm modal
+            // Setup alarm navigation - redirect to dedicated page
             document.getElementById('nav-port-alarms')?.addEventListener('click', function() {
-                document.getElementById('port-alarms-modal').classList.add('active');
-                loadPortAlarms(currentAlarmFilter);
-            });
-            
-            document.getElementById('close-alarms-modal')?.addEventListener('click', function() {
-                document.getElementById('port-alarms-modal').classList.remove('active');
-            });
-            
-            document.getElementById('port-alarms-modal')?.addEventListener('click', function(e) {
-                if (e.target === this) {
-                    this.classList.remove('active');
-                }
+                window.location.href = 'port_alarms.php';
             });
             
             // Alarm action functions for index page - GLOBAL SCOPE

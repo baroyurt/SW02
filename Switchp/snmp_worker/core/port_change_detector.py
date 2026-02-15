@@ -375,6 +375,9 @@ class PortChangeDetector:
         session.flush()
         
         # Create alarm for MAC movement
+        old_location = f"{old_device_name} port {old_port_str}"
+        new_location = f"{new_device.name} port {new_port}"
+        
         alarm, is_new = self.db_manager.get_or_create_alarm(
             session,
             new_device,
@@ -382,17 +385,15 @@ class PortChangeDetector:
             "HIGH",
             f"MAC {mac_address} moved to port {new_port}",
             change_details,
-            port_number=new_port
+            port_number=new_port,
+            old_value=old_location,
+            new_value=new_location,
+            mac_address=mac_address
         )
         
         if alarm:
             change.alarm_created = True
             change.alarm_id = alarm.id
-            
-            # Add MAC address and change details to alarm
-            alarm.mac_address = mac_address
-            alarm.old_value = f"{old_device_name} port {old_port_str}"
-            alarm.new_value = f"{new_device.name} port {new_port}"
             
             # Send notifications
             if is_new:
@@ -475,14 +476,14 @@ class PortChangeDetector:
                 "MEDIUM",
                 f"VLAN changed on port {current.port_number}",
                 change_details,
-                port_number=current.port_number
+                port_number=current.port_number,
+                old_value=str(previous.vlan_id or 'None'),
+                new_value=str(current.vlan_id or 'None')
             )
             
             if alarm:
                 change.alarm_created = True
                 change.alarm_id = alarm.id
-                alarm.old_value = str(previous.vlan_id or 'None')
-                alarm.new_value = str(current.vlan_id or 'None')
             
             self.logger.info(change_details)
             
@@ -528,14 +529,14 @@ class PortChangeDetector:
                 "MEDIUM",
                 f"Description changed on port {current.port_number}",
                 change_details,
-                port_number=current.port_number
+                port_number=current.port_number,
+                old_value=previous_desc or '(empty)',
+                new_value=current_desc or '(empty)'
             )
             
             if alarm:
                 change.alarm_created = True
                 change.alarm_id = alarm.id
-                alarm.old_value = previous_desc or '(empty)'
-                alarm.new_value = current_desc or '(empty)'
             
             self.logger.info(change_details)
             
