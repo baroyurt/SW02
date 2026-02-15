@@ -1,0 +1,333 @@
+<?php
+/**
+ * Device Import API
+ * Handles Excel bulk upload and device registry management
+ */
+
+header('Content-Type: application/json');
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE');
+header('Access-Control-Allow-Headers: Content-Type');
+
+require_once 'config.php';
+
+// Database connection
+function getDBConnection() {
+    $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
+    if ($conn->connect_error) {
+        die(json_encode(['error' => 'Database connection failed: ' . $conn->connect_error]));
+    }
+    $conn->set_charset('utf8mb4');
+    return $conn;
+}
+
+// Normalize MAC address
+function normalizeMac($mac) {
+    $mac = strtoupper(preg_replace('/[^0-9A-Fa-f]/', '', $mac));
+    if (strlen($mac) === 12) {
+        return implode(':', str_split($mac, 2));
+    }
+    return null;
+}
+
+// Validate IP address
+function validateIP($ip) {
+    return filter_var($ip, FILTER_VALIDATE_IP) !== false;
+}
+
+// Handle Excel file upload
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['excel_file'])) {
+    $file = $_FILES['excel_file'];
+    
+    // Validate file
+    $allowed_extensions = ['xls', 'xlsx', 'csv'];
+    $file_ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+    
+    if (!in_array($file_ext, $allowed_extensions)) {
+        echo json_encode(['error' => 'Invalid file type. Please upload Excel or CSV file.']);
+        exit;
+    }
+    
+    // Load library
+    if (!file_exists('vendor/autoload.php')) {
+        echo json_encode([
+            'error' => 'PhpSpreadsheet library not installed. Please run: composer require phpoffice/phpspreadsheet'
+        ]);
+        exit;
+    }
+    require_once 'vendor/autoload.php'; // Composer autoload
+    
+    try {
+        $spreadsheet = null;
+        
+        if ($file_ext === 'csv') {
+            $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($file['tmp_name']);
+        } else {
+            $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($file['tmp_name']);
+        }
+        
+        $sheet = $spreadsheet->getActiveSheet();
+        $rows = $sheet->toArray();
+        
+        // Skip header row
+        $header = array_shift($rows);
+        
+        $conn = getDBConnection();
+        $success_count = 0;
+        $error_count = 0;
+        $errors = [];
+        
+        // Start transaction
+        $conn->begin_transaction();
+        
+        try {
+            $stmt = $conn->prepare("
+                INSERT INTO mac_device_registry 
+                (mac_address, ip_address, device_name, user_name, location, department, notes, source, created_by)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'excel', ?)
+                ON DUPLICATE KEY UPDATE
+                    ip_address = VALUES(ip_address),
+                    device_name = VALUES(device_name),
+                    user_name = VALUES(user_name),
+                    location = VALUES(location),
+                    department = VALUES(department),
+                    notes = VALUES(notes),
+                    source = 'excel',
+                    updated_by = VALUES(created_by)
+            ");
+            
+            foreach ($rows as $index => $row) {
+                $row_num = $index + 2; // +2 for header and 0-index
+                
+                // Parse row (MAC, IP, Device Name, User, Location, Department, Notes)
+                $mac = isset($row[0]) ? normalizeMac($row[0]) : null;
+                $ip = isset($row[1]) ? trim($row[1]) : null;
+                $device_name = isset($row[2]) ? trim($row[2]) : null;
+                $user_name = isset($row[3]) ? trim($row[3]) : null;
+                $location = isset($row[4]) ? trim($row[4]) : null;
+                $department = isset($row[5]) ? trim($row[5]) : null;
+                $notes = isset($row[6]) ? trim($row[6]) : null;
+                
+                // Validate
+                if (!$mac) {
+                    $errors[] = "Row $row_num: Invalid MAC address";
+                    $error_count++;
+                    continue;
+                }
+                
+                if ($ip && !validateIP($ip)) {
+                    $errors[] = "Row $row_num: Invalid IP address ($ip)";
+                    $error_count++;
+                    continue;
+                }
+                
+                if (!$device_name) {
+                    $errors[] = "Row $row_num: Device name is required";
+                    $error_count++;
+                    continue;
+                }
+                
+                // Insert/Update
+                $stmt->bind_param(
+                    'ssssssss',
+                    $mac, $ip, $device_name, $user_name, 
+                    $location, $department, $notes, $_SERVER['REMOTE_USER'] ?? 'system'
+                );
+                
+                if ($stmt->execute()) {
+                    $success_count++;
+                } else {
+                    $errors[] = "Row $row_num: Database error - " . $stmt->error;
+                    $error_count++;
+                }
+            }
+            
+            $stmt->close();
+            
+            // Log import history
+            $stmt_history = $conn->prepare("
+                INSERT INTO mac_device_import_history 
+                (filename, total_rows, success_count, error_count, errors, imported_by)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ");
+            
+            $total_rows = count($rows);
+            $errors_json = json_encode($errors);
+            $imported_by = $_SERVER['REMOTE_USER'] ?? 'system';
+            
+            $stmt_history->bind_param(
+                'siiiss',
+                $file['name'], $total_rows, $success_count, $error_count, 
+                $errors_json, $imported_by
+            );
+            $stmt_history->execute();
+            $stmt_history->close();
+            
+            $conn->commit();
+            
+            echo json_encode([
+                'success' => true,
+                'message' => "Import completed",
+                'total_rows' => $total_rows,
+                'success_count' => $success_count,
+                'error_count' => $error_count,
+                'errors' => $errors
+            ]);
+            
+        } catch (Exception $e) {
+            $conn->rollback();
+            echo json_encode(['error' => 'Import failed: ' . $e->getMessage()]);
+        }
+        
+        $conn->close();
+        
+    } catch (Exception $e) {
+        echo json_encode(['error' => 'Failed to read file: ' . $e->getMessage()]);
+    }
+    
+    exit;
+}
+
+// Handle GET requests
+if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+    $action = $_GET['action'] ?? '';
+    $conn = getDBConnection();
+    
+    switch ($action) {
+        case 'list':
+            // List all devices
+            $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+            $per_page = isset($_GET['per_page']) ? (int)$_GET['per_page'] : 50;
+            $offset = ($page - 1) * $per_page;
+            
+            $search = isset($_GET['search']) ? $_GET['search'] : '';
+            $where = '';
+            $params = [];
+            
+            if ($search) {
+                $where = "WHERE mac_address LIKE ? OR device_name LIKE ? OR ip_address LIKE ?";
+                $search_param = "%$search%";
+                $params = [$search_param, $search_param, $search_param];
+            }
+            
+            // Count total
+            $count_query = "SELECT COUNT(*) as total FROM mac_device_registry $where";
+            $stmt = $conn->prepare($count_query);
+            if ($params) {
+                $stmt->bind_param('sss', ...$params);
+            }
+            $stmt->execute();
+            $total = $stmt->get_result()->fetch_assoc()['total'];
+            $stmt->close();
+            
+            // Get data
+            $query = "
+                SELECT * FROM mac_device_registry 
+                $where
+                ORDER BY updated_at DESC
+                LIMIT ? OFFSET ?
+            ";
+            $stmt = $conn->prepare($query);
+            if ($params) {
+                $all_params = array_merge($params, [$per_page, $offset]);
+                $types = str_repeat('s', count($params)) . 'ii';
+                $stmt->bind_param($types, ...$all_params);
+            } else {
+                $stmt->bind_param('ii', $per_page, $offset);
+            }
+            $stmt->execute();
+            $result = $stmt->get_result();
+            
+            $devices = [];
+            while ($row = $result->fetch_assoc()) {
+                $devices[] = $row;
+            }
+            $stmt->close();
+            
+            echo json_encode([
+                'success' => true,
+                'total' => $total,
+                'page' => $page,
+                'per_page' => $per_page,
+                'devices' => $devices
+            ]);
+            break;
+        
+        case 'get':
+            // Get single device
+            $mac = isset($_GET['mac']) ? normalizeMac($_GET['mac']) : null;
+            
+            if (!$mac) {
+                echo json_encode(['error' => 'MAC address required']);
+                break;
+            }
+            
+            $stmt = $conn->prepare("SELECT * FROM mac_device_registry WHERE mac_address = ?");
+            $stmt->bind_param('s', $mac);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            
+            if ($row = $result->fetch_assoc()) {
+                echo json_encode(['success' => true, 'device' => $row]);
+            } else {
+                echo json_encode(['error' => 'Device not found']);
+            }
+            $stmt->close();
+            break;
+        
+        case 'history':
+            // Get import history
+            $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 10;
+            
+            $stmt = $conn->prepare("
+                SELECT * FROM mac_device_import_history 
+                ORDER BY import_date DESC 
+                LIMIT ?
+            ");
+            $stmt->bind_param('i', $limit);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            
+            $history = [];
+            while ($row = $result->fetch_assoc()) {
+                $history[] = $row;
+            }
+            $stmt->close();
+            
+            echo json_encode(['success' => true, 'history' => $history]);
+            break;
+        
+        default:
+            echo json_encode(['error' => 'Invalid action']);
+    }
+    
+    $conn->close();
+    exit;
+}
+
+// Handle DELETE
+if ($_SERVER['REQUEST_METHOD'] === 'DELETE' || ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['_method']) && $_GET['_method'] === 'DELETE')) {
+    $mac = isset($_GET['mac']) ? normalizeMac($_GET['mac']) : null;
+    
+    if (!$mac) {
+        echo json_encode(['error' => 'MAC address required']);
+        exit;
+    }
+    
+    $conn = getDBConnection();
+    $stmt = $conn->prepare("DELETE FROM mac_device_registry WHERE mac_address = ?");
+    $stmt->bind_param('s', $mac);
+    
+    if ($stmt->execute()) {
+        echo json_encode(['success' => true, 'message' => 'Device deleted']);
+    } else {
+        echo json_encode(['error' => 'Failed to delete device']);
+    }
+    
+    $stmt->close();
+    $conn->close();
+    exit;
+}
+
+echo json_encode(['error' => 'Invalid request method']);
+?>
