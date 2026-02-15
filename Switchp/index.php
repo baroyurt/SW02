@@ -1829,7 +1829,12 @@ header("Expires: 0");
             </div>
             
             <!-- Device Import Component -->
-            <iframe src="device_import.html" style="width: 100%; height: calc(100vh - 150px); border: none; border-radius: 15px; background: white;"></iframe>
+            <iframe src="device_import.html" 
+                    sandbox="allow-scripts allow-same-origin allow-forms allow-downloads"
+                    style="width: 100%; height: calc(100vh - 150px); border: none; border-radius: 15px; background: white;"
+                    onload="this.style.display='block'"
+                    onerror="this.innerHTML='<div style=padding:20px;text-align:center;color:red;>Error loading device import page</div>'">
+            </iframe>
         </div>
     </div>
     
@@ -5484,7 +5489,9 @@ else if (panelType === 'fiber') {
                     loadPortAlarmsPage();
                     break;
                 case 'device-import':
-                    // Device import page is loaded via iframe, no additional loading needed
+                    // Device import page is loaded via iframe
+                    // Note: iframe includes sandbox attribute for security
+                    // and error handling for loading failures
                     break;
             }
         }
