@@ -1,0 +1,27 @@
+# Backup files
+*.bak
+*.backup
+
+# IDE
+.vscode/
+.idea/
+
+# Dependencies
+node_modules/
+vendor/
+
+# Build artifacts
+dist/
+build/
+
+# Logs
+*.log
+import_errors.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+tmp/
+temp/

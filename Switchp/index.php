@@ -5483,6 +5483,9 @@ else if (panelType === 'fiber') {
                 case 'port-alarms':
                     loadPortAlarmsPage();
                     break;
+                case 'device-import':
+                    // Device import page is loaded via iframe, no additional loading needed
+                    break;
             }
         }
 
