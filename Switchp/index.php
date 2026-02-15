@@ -1553,7 +1553,7 @@ header("Expires: 0");
                 <i class="fas fa-project-diagram"></i>
                 <span>Topoloji</span>
             </button>
-            <button class="nav-item" onclick="window.open('port_alarms.php', '_blank')" style="cursor: pointer;">
+            <button class="nav-item" data-page="port-alarms">
                 <i class="fas fa-exclamation-triangle"></i>
                 <span>Port Değişiklik Alarmları</span>
                 <span id="alarm-badge" class="alarm-badge" style="display: none;">0</span>
@@ -1756,7 +1756,12 @@ header("Expires: 0");
             </div>
             
             <!-- Port Alarms Component -->
-            <?php include 'port_alarms_component.php'; ?>
+            <iframe src="port_alarms.php" 
+                    sandbox="allow-scripts allow-forms allow-downloads"
+                    style="width: 100%; height: calc(100vh - 150px); border: none; border-radius: 15px; background: var(--dark);"
+                    onload="this.style.display='block'"
+                    onerror="this.innerHTML='<div style=padding:20px;text-align:center;color:red;>Error loading port alarms page</div>'">
+            </iframe>
         </div>
         
         <!-- Device Import Page -->
@@ -5601,11 +5606,8 @@ else if (panelType === 'fiber') {
         }
         
         function loadPortAlarmsPage() {
-            console.log('Loading port alarms page');
-            // Load port alarms when page is displayed
-            if (typeof loadPortAlarms === 'function') {
-                loadPortAlarms(currentAlarmFilter || 'all');
-            }
+            // Port alarms page is loaded via iframe (like device-import)
+            // The iframe loads port_alarms.php which handles its own display
         }
 
         function showSwitchDetail(sw) {
