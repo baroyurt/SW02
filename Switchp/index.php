@@ -1829,9 +1829,9 @@ header("Expires: 0");
             </div>
             
             <!-- Device Import Component -->
-            <iframe src="device_import.html" 
+            <iframe src="device_import.php" 
                     sandbox="allow-scripts allow-same-origin allow-forms allow-downloads"
-                    style="width: 100%; height: calc(100vh - 150px); border: none; border-radius: 15px; background: white;"
+                    style="width: 100%; height: calc(100vh - 150px); border: none; border-radius: 15px; background: var(--dark);"
                     onload="this.style.display='block'"
                     onerror="this.innerHTML='<div style=padding:20px;text-align:center;color:red;>Error loading device import page</div>'">
             </iframe>

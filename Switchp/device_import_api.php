@@ -99,14 +99,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['excel_file'])) {
             foreach ($rows as $index => $row) {
                 $row_num = $index + 2; // +2 for header and 0-index
                 
-                // Parse row (MAC, IP, Device Name, User, Location, Department, Notes)
-                $mac = isset($row[0]) ? normalizeMac($row[0]) : null;
-                $ip = isset($row[1]) ? trim($row[1]) : null;
-                $device_name = isset($row[2]) ? trim($row[2]) : null;
-                $user_name = isset($row[3]) ? trim($row[3]) : null;
-                $location = isset($row[4]) ? trim($row[4]) : null;
-                $department = isset($row[5]) ? trim($row[5]) : null;
-                $notes = isset($row[6]) ? trim($row[6]) : null;
+                // Detect format: Check if we have the new format (IP, Hostname, MAC) or old format
+                // New format: Column 0 = IP, Column 1 = Hostname, Column 2 = MAC (3 columns)
+                // Old format: Column 0 = MAC, Column 1 = IP, Column 2 = Device Name, ... (7 columns)
+                
+                $column_count = count(array_filter($row, function($val) { return $val !== null && $val !== ''; }));
+                
+                if ($column_count <= 3) {
+                    // New simplified format: IP Adresi | Hostname | MAC Adresi
+                    $ip = isset($row[0]) ? trim($row[0]) : null;
+                    $device_name = isset($row[1]) ? trim($row[1]) : null;
+                    $mac = isset($row[2]) ? normalizeMac($row[2]) : null;
+                    $user_name = null;
+                    $location = null;
+                    $department = null;
+                    $notes = null;
+                } else {
+                    // Old format: MAC, IP, Device Name, User, Location, Department, Notes
+                    $mac = isset($row[0]) ? normalizeMac($row[0]) : null;
+                    $ip = isset($row[1]) ? trim($row[1]) : null;
+                    $device_name = isset($row[2]) ? trim($row[2]) : null;
+                    $user_name = isset($row[3]) ? trim($row[3]) : null;
+                    $location = isset($row[4]) ? trim($row[4]) : null;
+                    $department = isset($row[5]) ? trim($row[5]) : null;
+                    $notes = isset($row[6]) ? trim($row[6]) : null;
+                }
                 
                 // Validate
                 if (!$mac) {
@@ -122,7 +139,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['excel_file'])) {
                 }
                 
                 if (!$device_name) {
-                    $errors[] = "Row $row_num: Device name is required";
+                    $errors[] = "Row $row_num: Hostname is required";
                     $error_count++;
                     continue;
                 }
@@ -303,6 +320,77 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     
     $conn->close();
     exit;
+}
+
+// Handle POST - Manual entry
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_FILES['excel_file'])) {
+    $data = json_decode(file_get_contents('php://input'), true);
+    $action = $data['action'] ?? '';
+    
+    if ($action === 'manual_add') {
+        $ip = isset($data['ip_address']) ? trim($data['ip_address']) : null;
+        $hostname = isset($data['hostname']) ? trim($data['hostname']) : null;
+        $mac = isset($data['mac_address']) ? normalizeMac($data['mac_address']) : null;
+        
+        // Validate inputs
+        $errors = [];
+        
+        if (!$mac) {
+            $errors[] = 'Invalid MAC address format';
+        }
+        
+        if (!$ip || !validateIP($ip)) {
+            $errors[] = 'Invalid IP address format';
+        }
+        
+        if (!$hostname) {
+            $errors[] = 'Hostname is required';
+        }
+        
+        if (count($errors) > 0) {
+            echo json_encode(['success' => false, 'errors' => $errors]);
+            exit;
+        }
+        
+        $conn = getDBConnection();
+        
+        try {
+            $stmt = $conn->prepare("
+                INSERT INTO mac_device_registry 
+                (mac_address, ip_address, device_name, source, created_by)
+                VALUES (?, ?, ?, 'manual', ?)
+                ON DUPLICATE KEY UPDATE
+                    ip_address = VALUES(ip_address),
+                    device_name = VALUES(device_name),
+                    source = 'manual',
+                    updated_by = VALUES(created_by)
+            ");
+            
+            $created_by = $_SERVER['REMOTE_USER'] ?? 'system';
+            $stmt->bind_param('ssss', $mac, $ip, $hostname, $created_by);
+            
+            if ($stmt->execute()) {
+                echo json_encode([
+                    'success' => true,
+                    'message' => 'Device added successfully',
+                    'device' => [
+                        'mac_address' => $mac,
+                        'ip_address' => $ip,
+                        'device_name' => $hostname
+                    ]
+                ]);
+            } else {
+                echo json_encode(['success' => false, 'error' => 'Database error: ' . $stmt->error]);
+            }
+            
+            $stmt->close();
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        }
+        
+        $conn->close();
+        exit;
+    }
 }
 
 // Handle DELETE
