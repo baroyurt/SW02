@@ -86,13 +86,24 @@ try {
  * Get active alarms with port change details
  */
 function getActiveAlarms($conn) {
-    $sql = "SELECT 
-                a.id, a.device_id, a.alarm_type, a.severity, a.status,
+    // Check if from_port and to_port columns exist (backwards compatibility)
+    $columns_to_select = "a.id, a.device_id, a.alarm_type, a.severity, a.status,
                 a.port_number, a.title, a.message, a.details,
                 a.occurrence_count, a.first_occurrence, a.last_occurrence,
                 a.acknowledged_at, a.acknowledged_by, a.acknowledgment_type,
-                a.silence_until, a.mac_address, a.old_value, a.new_value,
-                a.from_port, a.to_port,
+                a.silence_until, a.mac_address, a.old_value, a.new_value";
+    
+    // Try to check if columns exist
+    $result = $conn->query("SHOW COLUMNS FROM alarms LIKE 'from_port'");
+    if ($result && $result->num_rows > 0) {
+        $columns_to_select .= ", a.from_port, a.to_port";
+    } else {
+        // Columns don't exist yet, use NULL
+        $columns_to_select .= ", NULL as from_port, NULL as to_port";
+    }
+    
+    $sql = "SELECT 
+                $columns_to_select,
                 d.name as device_name, d.ip_address as device_ip,
                 CASE 
                     WHEN a.silence_until > NOW() THEN 1
