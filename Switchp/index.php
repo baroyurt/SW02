@@ -1420,8 +1420,20 @@ header("Expires: 0");
 
 /* Alarm Modal Styles */
 .alarm-modal-content {
-    max-height: 70vh;
+    max-height: calc(90vh - 200px);
     overflow-y: auto;
+    overflow-x: hidden;
+}
+
+/* Ensure modal is always centered and visible */
+#port-alarms-modal.modal-overlay {
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+#port-alarms-modal .modal {
+    position: relative;
+    margin: 50px auto;
 }
 
 .alarm-list-item {
@@ -2384,7 +2396,10 @@ header("Expires: 0");
     <div class="modal-overlay" id="port-alarms-modal">
         <div class="modal" style="max-width: 900px;">
             <div class="modal-header">
-                <h3 class="modal-title"><i class="fas fa-exclamation-triangle"></i> Port Değişiklik Alarmları</h3>
+                <div>
+                    <h3 class="modal-title"><i class="fas fa-exclamation-triangle"></i> Port Değişiklik Alarmları</h3>
+                    <div id="alarm-severity-counts"></div>
+                </div>
                 <button class="modal-close" id="close-alarms-modal">&times;</button>
             </div>
             <div class="alarm-modal-content">
@@ -7415,6 +7430,11 @@ document.getElementById('rack-form').addEventListener('submit', async function(e
             function displayAlarms(alarms, filter) {
                 const container = document.getElementById('alarms-list-container');
                 
+                if (!container) {
+                    console.error('alarms-list-container not found');
+                    return;
+                }
+                
                 if (!alarms || alarms.length === 0) {
                     container.innerHTML = `
                         <div style="text-align: center; padding: 40px; color: var(--text-light);">
@@ -7423,6 +7443,8 @@ document.getElementById('rack-form').addEventListener('submit', async function(e
                             <p style="font-size: 0.9rem;">Tüm portlar normal durumda</p>
                         </div>
                     `;
+                    // Update severity counts display
+                    updateSeverityCounts(alarms || []);
                     return;
                 }
                 
@@ -7431,6 +7453,9 @@ document.getElementById('rack-form').addEventListener('submit', async function(e
                 if (filter !== 'all') {
                     filteredAlarms = alarms.filter(a => a.alarm_type === filter);
                 }
+                
+                // Update severity counts display (always show total counts)
+                updateSeverityCounts(alarms);
                 
                 if (filteredAlarms.length === 0) {
                     container.innerHTML = `
@@ -7498,13 +7523,54 @@ document.getElementById('rack-form').addEventListener('submit', async function(e
                 container.innerHTML = html;
             }
             
+            // Update severity counts display
+            function updateSeverityCounts(alarms) {
+                const counts = {
+                    CRITICAL: 0,
+                    HIGH: 0,
+                    MEDIUM: 0,
+                    LOW: 0,
+                    INFO: 0
+                };
+                
+                alarms.forEach(alarm => {
+                    const severity = alarm.severity.toUpperCase();
+                    if (counts.hasOwnProperty(severity)) {
+                        counts[severity]++;
+                    }
+                });
+                
+                // Update the severity display in modal header if it exists
+                const severityDisplay = document.getElementById('alarm-severity-counts');
+                if (severityDisplay) {
+                    severityDisplay.innerHTML = `
+                        <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-top: 10px;">
+                            <span style="padding: 4px 10px; background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444; border-radius: 5px; color: #ef4444; font-weight: bold;">
+                                <i class="fas fa-exclamation-circle"></i> Critical: ${counts.CRITICAL}
+                            </span>
+                            <span style="padding: 4px 10px; background: rgba(245, 158, 11, 0.2); border: 1px solid #f59e0b; border-radius: 5px; color: #f59e0b; font-weight: bold;">
+                                <i class="fas fa-exclamation-triangle"></i> High: ${counts.HIGH}
+                            </span>
+                            <span style="padding: 4px 10px; background: rgba(234, 179, 8, 0.2); border: 1px solid #eab308; border-radius: 5px; color: #eab308; font-weight: bold;">
+                                <i class="fas fa-info-circle"></i> Medium: ${counts.MEDIUM}
+                            </span>
+                            <span style="padding: 4px 10px; background: rgba(148, 163, 184, 0.2); border: 1px solid #94a3b8; border-radius: 5px; color: #94a3b8; font-weight: bold;">
+                                <i class="fas fa-check-circle"></i> Low: ${counts.LOW}
+                            </span>
+                        </div>
+                    `;
+                }
+            }
+            
             function updateAlarmBadge(count) {
                 const badge = document.getElementById('alarm-badge');
-                if (count > 0) {
-                    badge.textContent = count;
-                    badge.style.display = 'inline-block';
-                } else {
-                    badge.style.display = 'none';
+                if (badge) {
+                    if (count > 0) {
+                        badge.textContent = count;
+                        badge.style.display = 'inline-block';
+                    } else {
+                        badge.style.display = 'none';
+                    }
                 }
             }
             
@@ -7818,6 +7884,12 @@ ${alarm.is_silenced ? `Sesize Alındı: ${alarm.silence_until} saate kadar\n` : 
                 snmpDevices = data.devices || [];
                 
                 const container = document.getElementById('snmp-devices-list');
+                
+                // Add null check to prevent classList error
+                if (!container) {
+                    console.error('snmp-devices-list container not found');
+                    return;
+                }
                 
                 if (data.devices.length === 0) {
                     container.innerHTML = '<p style="text-align: center; padding: 40px; color: var(--text-light);">Henüz SNMP Worker tarafından toplanan veri yok.</p>';
