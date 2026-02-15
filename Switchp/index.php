@@ -1541,6 +1541,11 @@ header("Expires: 0");
                 <i class="fas fa-project-diagram"></i>
                 <span>Topoloji</span>
             </button>
+            <button class="nav-item" data-page="port-alarms">
+                <i class="fas fa-exclamation-triangle"></i>
+                <span>Port Değişiklik Alarmları</span>
+                <span id="alarm-badge" class="alarm-badge" style="display: none;">0</span>
+            </button>
         </div>
         
         <div class="nav-section">
@@ -1580,11 +1585,6 @@ header("Expires: 0");
             <button class="nav-item" id="nav-snmp-sync">
                 <i class="fas fa-sync-alt"></i>
                 <span>SNMP Verilerini Görüntüle</span>
-            </button>
-            <button class="nav-item" id="nav-port-alarms">
-                <i class="fas fa-exclamation-triangle"></i>
-                <span>Port Alarmları</span>
-                <span id="alarm-badge" class="alarm-badge" style="display: none;">0</span>
             </button>
             <button class="nav-item" id="nav-snmp-admin" onclick="window.open('snmp_admin.php', '_blank')" style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3);">
                 <i class="fas fa-cogs"></i>
@@ -1669,9 +1669,6 @@ header("Expires: 0");
                     <div class="stat-label">Patch Panel</div>
                 </div>
             </div>
-            
-            <!-- Port Alarms Section (NEW) -->
-            <?php include 'port_alarms_component.php'; ?>
             
             <div class="racks-grid" id="dashboard-racks">
                 <!-- Rack cards will be loaded here -->
@@ -1789,6 +1786,19 @@ header("Expires: 0");
                     </div>
                 </div>
             </div>
+        </div>
+        
+        <!-- Port Alarms Page -->
+        <div class="page-content" id="page-port-alarms">
+            <div class="top-bar">
+                <div class="page-title">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span>Port Değişiklik Alarmları</span>
+                </div>
+            </div>
+            
+            <!-- Port Alarms Component -->
+            <?php include 'port_alarms_component.php'; ?>
         </div>
     </div>
     
@@ -5436,6 +5446,9 @@ else if (panelType === 'fiber') {
                 case 'topology':
                     loadTopologyPage();
                     break;
+                case 'port-alarms':
+                    loadPortAlarmsPage();
+                    break;
             }
         }
 
@@ -5685,6 +5698,14 @@ else if (panelType === 'fiber') {
 
         function loadTopologyPage() {
             console.log('Loading topology page');
+        }
+        
+        function loadPortAlarmsPage() {
+            console.log('Loading port alarms page');
+            // Load port alarms when page is displayed
+            if (typeof loadPortAlarms === 'function') {
+                loadPortAlarms(currentAlarmFilter || 'all');
+            }
         }
 
         function showSwitchDetail(sw) {
@@ -7534,15 +7555,7 @@ document.getElementById('rack-form').addEventListener('submit', async function(e
                 }
             };
             
-            // Setup alarm modal
-            document.getElementById('nav-port-alarms')?.addEventListener('click', function() {
-                document.getElementById('port-alarms-modal').classList.add('active');
-                loadPortAlarms(currentAlarmFilter);
-            });
-            
-            document.getElementById('close-alarms-modal')?.addEventListener('click', function() {
-                document.getElementById('port-alarms-modal').classList.remove('active');
-            });
+            // Port alarms modal handlers removed - now using page navigation
             
             document.getElementById('port-alarms-modal')?.addEventListener('click', function(e) {
                 if (e.target === this) {
