@@ -1566,17 +1566,9 @@ header("Expires: 0");
         
         <div class="nav-section">
             <div class="nav-title">SNMP Admin</div>
-            <button class="nav-item" id="nav-snmp-admin" onclick="window.open('snmp_admin.php', '_blank')" style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3);">
+            <button class="nav-item" id="nav-snmp-admin" onclick="window.open('admin.php', '_blank')" style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3);">
                 <i class="fas fa-cogs"></i>
                 <span>SNMP Admin Panel</span>
-            </button>
-        </div>
-        
-        <div class="nav-section">
-            <div class="nav-title">SNMP Veri Senkronizasyonu</div>
-            <button class="nav-item" id="nav-snmp-sync">
-                <i class="fas fa-sync-alt"></i>
-                <span>SNMP Verilerini Görüntüle</span>
             </button>
         </div>
         
@@ -2080,68 +2072,6 @@ header("Expires: 0");
     </div>
     
     <!-- SNMP Data Viewer Modal -->
-    <div class="modal-overlay" id="snmp-modal">
-        <div class="modal" style="max-width: 1200px;">
-            <div class="modal-header">
-                <h3 class="modal-title">SNMP Worker Verileri</h3>
-                <button class="modal-close" id="close-snmp-modal">&times;</button>
-            </div>
-            
-            <div class="tabs">
-                <button class="tab-btn active" data-snmp-tab="devices">Cihazlar</button>
-                <button class="tab-btn" data-snmp-tab="alarms">Alarmlar</button>
-                <button class="tab-btn" data-snmp-tab="sync">Senkronizasyon</button>
-            </div>
-            
-            <div id="snmp-content">
-                <!-- Content will be loaded dynamically -->
-                <div id="snmp-tab-devices" class="tab-content active">
-                    <div style="margin-bottom: 20px;">
-                        <button class="btn btn-primary" onclick="loadSNMPDevices()">
-                            <i class="fas fa-sync"></i> Yenile
-                        </button>
-                    </div>
-                    <div id="snmp-devices-list" style="overflow-x: auto;">
-                        <p style="text-align: center; padding: 40px; color: var(--text-light);">
-                            <i class="fas fa-spinner fa-spin" style="font-size: 2rem;"></i><br><br>
-                            Yükleniyor...
-                        </p>
-                    </div>
-                </div>
-                
-                <div id="snmp-tab-alarms" class="tab-content">
-                    <div style="margin-bottom: 20px;">
-                        <button class="btn btn-primary" onclick="loadSNMPAlarms()">
-                            <i class="fas fa-sync"></i> Yenile
-                        </button>
-                    </div>
-                    <div id="snmp-alarms-list">
-                        <p style="text-align: center; padding: 40px; color: var(--text-light);">
-                            Alarmlar yüklenecek...
-                        </p>
-                    </div>
-                </div>
-                
-                <div id="snmp-tab-sync" class="tab-content">
-                    <div style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 10px; padding: 20px; margin-bottom: 20px;">
-                        <h4 style="color: var(--primary); margin-bottom: 10px;">
-                            <i class="fas fa-info-circle"></i> Senkronizasyon Hakkında
-                        </h4>
-                        <p style="color: var(--text-light); line-height: 1.6;">
-                            Bu işlem, SNMP Worker tarafından toplanan verileri ana switch veritabanına aktarır. 
-                            Mevcut switch'ler güncellenir, yeni cihazlar eklenir.
-                        </p>
-                    </div>
-                    
-                    <button class="btn btn-success" onclick="syncSNMPToSwitches()" style="width: 100%; padding: 15px; font-size: 1.1rem;">
-                        <i class="fas fa-sync-alt"></i> SNMP Verilerini Senkronize Et
-                    </button>
-                    
-                    <div id="sync-result" style="margin-top: 20px;"></div>
-                </div>
-            </div>
-        </div>
-    </div>
     
     <!-- Backup/Restore Modal -->
     <div class="modal-overlay" id="backup-modal">
@@ -6469,13 +6399,6 @@ if (isHub) {
             }
             <?php endif; ?>
             
-            // SNMP Sync button handler
-            document.getElementById('nav-snmp-sync').addEventListener('click', (e) => {
-                e.preventDefault();
-                document.getElementById('snmp-modal').classList.add('active');
-                loadSNMPDevices();
-            });
-            
             <?php if ($currentUser['role'] === 'admin'): ?>
             const navHistory = document.getElementById('nav-history');
             if (navHistory) {
@@ -7620,203 +7543,7 @@ ${alarm.is_silenced ? `Sesize Alındı: ${alarm.silence_until} saate kadar\n` : 
         // SNMP DATA FUNCTIONS
         // ============================================
         
-        async function loadSNMPDevices() {
-            try {
-                const response = await fetch('snmp_data_api.php?action=get_devices');
-                const data = await response.json();
-                
-                if (!data.success) {
-                    throw new Error(data.error || 'Failed to load devices');
-                }
-                
-                // Store devices globally for search functionality
-                snmpDevices = data.devices || [];
-                
-                const container = document.getElementById('snmp-devices-list');
-                
-                // Add null check to prevent classList error
-                if (!container) {
-                    console.error('snmp-devices-list container not found');
-                    return;
-                }
-                
-                if (data.devices.length === 0) {
-                    container.innerHTML = '<p style="text-align: center; padding: 40px; color: var(--text-light);">Henüz SNMP Worker tarafından toplanan veri yok.</p>';
-                    return;
-                }
-                
-                let html = '<table style="width: 100%; border-collapse: collapse;">';
-                html += '<thead><tr>';
-                html += '<th style="padding: 12px; text-align: left; border-bottom: 2px solid var(--border);">Cihaz</th>';
-                html += '<th style="padding: 12px; text-align: left; border-bottom: 2px solid var(--border);">IP</th>';
-                html += '<th style="padding: 12px; text-align: left; border-bottom: 2px solid var(--border);">Vendor</th>';
-                html += '<th style="padding: 12px; text-align: left; border-bottom: 2px solid var(--border);">Model</th>';
-                html += '<th style="padding: 12px; text-align: center; border-bottom: 2px solid var(--border);">Port Sayısı</th>';
-                html += '<th style="padding: 12px; text-align: center; border-bottom: 2px solid var(--border);">Durum</th>';
-                html += '<th style="padding: 12px; text-align: left; border-bottom: 2px solid var(--border);">Son Polling</th>';
-                html += '</tr></thead><tbody>';
-                
-                data.devices.forEach(device => {
-                    const statusColor = device.status === 'online' ? 'var(--success)' : 'var(--danger)';
-                    const statusIcon = device.status === 'online' ? 'check-circle' : 'times-circle';
-                    
-                    html += '<tr style="border-bottom: 1px solid var(--border);">';
-                    html += `<td style="padding: 12px;">${device.name}</td>`;
-                    html += `<td style="padding: 12px;">${device.ip_address}</td>`;
-                    html += `<td style="padding: 12px;">${device.vendor}</td>`;
-                    html += `<td style="padding: 12px;">${device.model}</td>`;
-                    html += `<td style="padding: 12px; text-align: center;">${device.total_ports || '-'}</td>`;
-                    html += `<td style="padding: 12px; text-align: center;"><i class="fas fa-${statusIcon}" style="color: ${statusColor};"></i> ${device.status}</td>`;
-                    html += `<td style="padding: 12px;">${device.last_successful_poll ? new Date(device.last_successful_poll).toLocaleString('tr-TR') : 'Hiç'}</td>`;
-                    html += '</tr>';
-                });
-                
-                html += '</tbody></table>';
-                container.innerHTML = html;
-                
-            } catch (error) {
-                console.error('Error loading SNMP devices:', error);
-                document.getElementById('snmp-devices-list').innerHTML = 
-                    '<p style="text-align: center; padding: 40px; color: var(--danger);">Hata: ' + error.message + '</p>';
-            }
-        }
-        
-        async function loadSNMPAlarms() {
-            try {
-                const response = await fetch('snmp_data_api.php?action=get_alarms');
-                const data = await response.json();
-                
-                if (!data.success) {
-                    throw new Error(data.error || 'Failed to load alarms');
-                }
-                
-                const container = document.getElementById('snmp-alarms-list');
-                
-                if (data.alarms.length === 0) {
-                    container.innerHTML = '<p style="text-align: center; padding: 40px; color: var(--success);">✓ Aktif alarm yok</p>';
-                    return;
-                }
-                
-                let html = '<div style="display: flex; flex-direction: column; gap: 10px;">';
-                
-                data.alarms.forEach(alarm => {
-                    const severityColors = {
-                        'critical': 'var(--danger)',
-                        'high': 'var(--warning)',
-                        'medium': '#f59e0b',
-                        'low': 'var(--primary)',
-                        'info': 'var(--text-light)'
-                    };
-                    
-                    const color = severityColors[alarm.severity] || 'var(--text-light)';
-                    
-                    html += `<div style="background: rgba(15, 23, 42, 0.5); border-left: 4px solid ${color}; border-radius: 8px; padding: 15px;">`;
-                    html += `<div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">`;
-                    html += `<div>`;
-                    html += `<h4 style="color: ${color}; margin-bottom: 5px;">${alarm.title}</h4>`;
-                    html += `<p style="color: var(--text-light); font-size: 0.9rem;">${alarm.device_name} (${alarm.device_ip})${alarm.port_number ? ' - Port ' + alarm.port_number : ''}</p>`;
-                    html += `</div>`;
-                    html += `<span style="background: ${color}20; color: ${color}; padding: 4px 12px; border-radius: 20px; font-size: 0.85rem; font-weight: 600;">${alarm.severity.toUpperCase()}</span>`;
-                    html += `</div>`;
-                    html += `<p style="color: var(--text); margin-bottom: 10px;">${alarm.message}</p>`;
-                    html += `<div style="display: flex; gap: 20px; font-size: 0.85rem; color: var(--text-light);">`;
-                    html += `<span><i class="fas fa-clock"></i> ${new Date(alarm.last_occurrence).toLocaleString('tr-TR')}</span>`;
-                    if (alarm.occurrence_count > 1) {
-                        html += `<span><i class="fas fa-redo"></i> ${alarm.occurrence_count} kez tekrarlandı</span>`;
-                    }
-                    html += `</div>`;
-                    html += `</div>`;
-                });
-                
-                html += '</div>';
-                container.innerHTML = html;
-                
-            } catch (error) {
-                console.error('Error loading alarms:', error);
-                document.getElementById('snmp-alarms-list').innerHTML = 
-                    '<p style="text-align: center; padding: 40px; color: var(--danger);">Hata: ' + error.message + '</p>';
-            }
-        }
-        
-        async function syncSNMPToSwitches() {
-            const resultDiv = document.getElementById('sync-result');
-            
-            try {
-                resultDiv.innerHTML = '<p style="text-align: center; padding: 20px;"><i class="fas fa-spinner fa-spin"></i> Senkronize ediliyor...</p>';
-                
-                const response = await fetch('snmp_data_api.php?action=sync_to_switches');
-                const data = await response.json();
-                
-                if (!data.success) {
-                    throw new Error(data.error || 'Senkronizasyon başarısız');
-                }
-                
-                resultDiv.innerHTML = `
-                    <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 10px; padding: 20px;">
-                        <h4 style="color: var(--success); margin-bottom: 10px;">
-                            <i class="fas fa-check-circle"></i> Başarılı!
-                        </h4>
-                        <p style="color: var(--text);">${data.message}</p>
-                        <p style="color: var(--text-light); font-size: 0.9rem; margin-top: 10px;">
-                            Toplam ${data.synced_count} cihaz ve portları ana veritabanına aktarıldı.
-                        </p>
-                    </div>
-                `;
-                
-                // Reload main data
-                setTimeout(() => {
-                    loadData();
-                    showToast('Veriler güncellendi', 'success');
-                }, 1000);
-                
-            } catch (error) {
-                console.error('Sync error:', error);
-                resultDiv.innerHTML = `
-                    <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 10px; padding: 20px;">
-                        <h4 style="color: var(--danger); margin-bottom: 10px;">
-                            <i class="fas fa-exclamation-circle"></i> Hata
-                        </h4>
-                        <p style="color: var(--text);">${error.message}</p>
-                    </div>
-                `;
-            }
-        }
-        
-        // SNMP Modal close handlers
-        document.getElementById('close-snmp-modal')?.addEventListener('click', () => {
-            document.getElementById('snmp-modal').classList.remove('active');
-        });
-        
-        document.getElementById('snmp-modal')?.addEventListener('click', function(e) {
-            if (e.target === this) {
-                this.classList.remove('active');
-            }
-        });
-        
-        // SNMP tab handlers
-        document.querySelectorAll('[data-snmp-tab]').forEach(tab => {
-            tab.addEventListener('click', function() {
-                // Update active tab
-                document.querySelectorAll('[data-snmp-tab]').forEach(t => t.classList.remove('active'));
-                this.classList.add('active');
-                
-                // Hide all tab contents
-                document.querySelectorAll('#snmp-content .tab-content').forEach(c => c.classList.remove('active'));
-                
-                // Show selected tab
-                const tabName = this.getAttribute('data-snmp-tab');
-                document.getElementById('snmp-tab-' + tabName)?.classList.add('active');
-                
-                // Load data for tab
-                if (tabName === 'devices') {
-                    loadSNMPDevices();
-                } else if (tabName === 'alarms') {
-                    loadSNMPAlarms();
-                }
-            });
-        });
-        
-        // Handle URL parameters (e.g., switch_id from snmp_admin.php)
+        // Handle URL parameters (e.g., switch_id from admin.php)
         function handleURLParameters() {
             const urlParams = new URLSearchParams(window.location.search);
             const switchId = urlParams.get('switch_id');
