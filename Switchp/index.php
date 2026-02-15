@@ -1670,6 +1670,9 @@ header("Expires: 0");
                 </div>
             </div>
             
+            <!-- Port Alarms Section (NEW) -->
+            <?php include 'port_alarms_component.php'; ?>
+            
             <div class="racks-grid" id="dashboard-racks">
                 <!-- Rack cards will be loaded here -->
             </div>

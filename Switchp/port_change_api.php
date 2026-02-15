@@ -34,6 +34,14 @@ try {
             acknowledgeAlarm($conn, $auth, $alarmId, $ackType, $note);
             break;
             
+        case 'bulk_acknowledge':
+            // Bulk acknowledge multiple alarms
+            $alarmIds = isset($_REQUEST['alarm_ids']) ? $_REQUEST['alarm_ids'] : [];
+            $ackType = isset($_REQUEST['ack_type']) ? $_REQUEST['ack_type'] : 'known_change';
+            $note = isset($_REQUEST['note']) ? $_REQUEST['note'] : '';
+            bulkAcknowledgeAlarms($conn, $auth, $alarmIds, $ackType, $note);
+            break;
+            
         case 'silence_alarm':
             // Accept both GET and POST for compatibility
             $alarmId = isset($_REQUEST['alarm_id']) ? intval($_REQUEST['alarm_id']) : 0;
@@ -84,6 +92,7 @@ function getActiveAlarms($conn) {
                 a.occurrence_count, a.first_occurrence, a.last_occurrence,
                 a.acknowledged_at, a.acknowledged_by, a.acknowledgment_type,
                 a.silence_until, a.mac_address, a.old_value, a.new_value,
+                a.from_port, a.to_port,
                 d.name as device_name, d.ip_address as device_ip,
                 CASE 
                     WHEN a.silence_until > NOW() THEN 1
@@ -95,7 +104,7 @@ function getActiveAlarms($conn) {
                 END as is_port_change
             FROM alarms a
             LEFT JOIN snmp_devices d ON a.device_id = d.id
-            WHERE a.status = 'active'
+            WHERE a.status = 'ACTIVE'
             ORDER BY 
                 CASE a.severity
                     WHEN 'CRITICAL' THEN 1
@@ -196,7 +205,7 @@ function acknowledgeAlarm($conn, $auth, $alarmId, $ackType, $note) {
             // Mark as acknowledged
             $stmt = $conn->prepare("
                 UPDATE alarms 
-                SET status = 'acknowledged',
+                SET status = 'ACKNOWLEDGED',
                     acknowledged_at = NOW(),
                     acknowledged_by = ?,
                     acknowledgment_type = 'known_change',
@@ -205,6 +214,19 @@ function acknowledgeAlarm($conn, $auth, $alarmId, $ackType, $note) {
             ");
             $stmt->bind_param("si", $user['username'], $alarmId);
             $stmt->execute();
+            
+            // Add to whitelist if MAC address and port are present
+            if (!empty($alarm['mac_address']) && !empty($alarm['port_number'])) {
+                $deviceName = getDeviceName($conn, $alarm['device_id']);
+                addToWhitelist(
+                    $conn,
+                    $deviceName,
+                    $alarm['port_number'],
+                    $alarm['mac_address'],
+                    $user['username'],
+                    $note
+                );
+            }
             
             // Add to alarm history
             $stmt = $conn->prepare("
@@ -220,7 +242,7 @@ function acknowledgeAlarm($conn, $auth, $alarmId, $ackType, $note) {
             // Mark as resolved
             $stmt = $conn->prepare("
                 UPDATE alarms 
-                SET status = 'resolved',
+                SET status = 'RESOLVED',
                     resolved_at = NOW(),
                     resolved_by = ?,
                     updated_at = NOW()
@@ -485,4 +507,164 @@ function getAlarmDetails($conn, $alarmId) {
         'alarm' => $alarm
     ]);
 }
+
+/**
+ * Get device name by ID
+ */
+function getDeviceName($conn, $deviceId) {
+    $stmt = $conn->prepare("SELECT name FROM snmp_devices WHERE id = ?");
+    $stmt->bind_param("i", $deviceId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $row = $result->fetch_assoc();
+    return $row ? $row['name'] : '';
+}
+
+/**
+ * Add MAC+Port combination to whitelist
+ */
+function addToWhitelist($conn, $deviceName, $portNumber, $macAddress, $acknowledgedBy, $note) {
+    try {
+        // Check if already whitelisted
+        $stmt = $conn->prepare("
+            SELECT id FROM acknowledged_port_mac
+            WHERE device_name = ? AND port_number = ? AND mac_address = ?
+        ");
+        $stmt->bind_param("sis", $deviceName, $portNumber, $macAddress);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        
+        if ($result->num_rows > 0) {
+            // Already whitelisted, update note
+            $stmt = $conn->prepare("
+                UPDATE acknowledged_port_mac
+                SET note = ?, acknowledged_by = ?, updated_at = NOW()
+                WHERE device_name = ? AND port_number = ? AND mac_address = ?
+            ");
+            $stmt->bind_param("sssis", $note, $acknowledgedBy, $deviceName, $portNumber, $macAddress);
+            $stmt->execute();
+        } else {
+            // Add to whitelist
+            $stmt = $conn->prepare("
+                INSERT INTO acknowledged_port_mac
+                (device_name, port_number, mac_address, acknowledged_by, note)
+                VALUES (?, ?, ?, ?, ?)
+            ");
+            $stmt->bind_param("sisss", $deviceName, $portNumber, $macAddress, $acknowledgedBy, $note);
+            $stmt->execute();
+        }
+        
+        return true;
+    } catch (Exception $e) {
+        error_log("Failed to add to whitelist: " . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Bulk acknowledge multiple alarms
+ */
+function bulkAcknowledgeAlarms($conn, $auth, $alarmIds, $ackType, $note) {
+    $user = $auth->getUser();
+    
+    // Parse alarm IDs if it's a JSON string
+    if (is_string($alarmIds)) {
+        $alarmIds = json_decode($alarmIds, true);
+    }
+    
+    if (!is_array($alarmIds) || empty($alarmIds)) {
+        echo json_encode([
+            'success' => false,
+            'error' => 'No alarm IDs provided'
+        ]);
+        return;
+    }
+    
+    $conn->begin_transaction();
+    
+    try {
+        $successCount = 0;
+        $failedCount = 0;
+        
+        foreach ($alarmIds as $alarmId) {
+            $alarmId = intval($alarmId);
+            if ($alarmId <= 0) {
+                $failedCount++;
+                continue;
+            }
+            
+            // Get alarm
+            $stmt = $conn->prepare("SELECT * FROM alarms WHERE id = ?");
+            $stmt->bind_param("i", $alarmId);
+            $stmt->execute();
+            $alarm = $stmt->get_result()->fetch_assoc();
+            
+            if (!$alarm) {
+                $failedCount++;
+                continue;
+            }
+            
+            // Mark as acknowledged
+            $stmt = $conn->prepare("
+                UPDATE alarms 
+                SET status = 'ACKNOWLEDGED',
+                    acknowledged_at = NOW(),
+                    acknowledged_by = ?,
+                    acknowledgment_type = ?,
+                    updated_at = NOW()
+                WHERE id = ?
+            ");
+            $stmt->bind_param("ssi", $user['username'], $ackType, $alarmId);
+            $stmt->execute();
+            
+            // Add to whitelist if MAC address and port are present
+            if (!empty($alarm['mac_address']) && !empty($alarm['port_number'])) {
+                $deviceName = getDeviceName($conn, $alarm['device_id']);
+                addToWhitelist(
+                    $conn,
+                    $deviceName,
+                    $alarm['port_number'],
+                    $alarm['mac_address'],
+                    $user['username'],
+                    $note
+                );
+            }
+            
+            // Add to alarm history
+            $stmt = $conn->prepare("
+                INSERT INTO alarm_history 
+                (alarm_id, old_status, new_status, change_reason, change_message, changed_at)
+                VALUES (?, 'ACTIVE', 'ACKNOWLEDGED', 'Bulk acknowledged by user', ?, NOW())
+            ");
+            $message = "Bulk acknowledged by {$user['username']}: $note";
+            $stmt->bind_param("is", $alarmId, $message);
+            $stmt->execute();
+            
+            $successCount++;
+        }
+        
+        // Log activity
+        $auth->logActivity(
+            $user['id'],
+            $user['username'],
+            'bulk_alarm_acknowledge',
+            "Bulk acknowledged $successCount alarms"
+        );
+        
+        $conn->commit();
+        
+        echo json_encode([
+            'success' => true,
+            'message' => "$successCount alarms acknowledged successfully",
+            'acknowledged_count' => $successCount,
+            'failed_count' => $failedCount
+        ]);
+        
+    } catch (Exception $e) {
+        $conn->rollback();
+        throw $e;
+    }
+}
+
+
 

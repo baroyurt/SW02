@@ -382,15 +382,17 @@ class PortChangeDetector:
             "HIGH",
             f"MAC {mac_address} moved to port {new_port}",
             change_details,
-            port_number=new_port
+            port_number=new_port,
+            mac_address=mac_address,
+            from_port=old_port,
+            to_port=new_port
         )
         
         if alarm:
             change.alarm_created = True
             change.alarm_id = alarm.id
             
-            # Add MAC address and change details to alarm
-            alarm.mac_address = mac_address
+            # Add old/new value details to alarm
             alarm.old_value = f"{old_device_name} port {old_port_str}"
             alarm.new_value = f"{new_device.name} port {new_port}"
             

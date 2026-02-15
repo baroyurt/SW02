@@ -248,10 +248,22 @@ class DatabaseManager:
         severity: Union[AlarmSeverity, str],
         title: str,
         message: str,
-        port_number: Optional[int] = None
+        port_number: Optional[int] = None,
+        mac_address: Optional[str] = None,
+        from_port: Optional[int] = None,
+        to_port: Optional[int] = None
     ) -> tuple[Alarm, bool]:
         """
-        Get existing active alarm or create new one.
+        Get existing active alarm or create new one with uniqueness checking.
+        
+        Alarm uniqueness is determined by:
+        - device_name
+        - port_number
+        - mac_address
+        - from_port
+        - to_port
+        
+        If alarm is whitelisted (acknowledged_port_mac), no alarm is created.
         
         Args:
             session: Database session
@@ -261,63 +273,69 @@ class DatabaseManager:
             title: Alarm title
             message: Alarm message
             port_number: Port number (for port-specific alarms)
+            mac_address: MAC address involved in alarm
+            from_port: Source port for MAC moved alarms
+            to_port: Destination port for MAC moved alarms
             
         Returns:
-            Tuple of (Alarm instance, is_new)
+            Tuple of (Alarm instance or None, is_new)
         """
-        # ★★★ FORCE DEBUG - Her zaman konsola yazdır ★★★
-        print("\n" + "="*60)
-        print("🔴🔴🔴 ALARM DEBUG - DATABASE MANAGER")
-        print("="*60)
-        print(f"🔴 Çağrı Tipi    : {alarm_type}")
-        print(f"🔴 Gelen Severity: '{severity}'")
-        print(f"🔴 Severity Tipi : {type(severity).__name__}")
-        print(f"🔴 Device        : {device.name} ({device.ip_address})")
-        print(f"🔴 Port          : {port_number if port_number else 'N/A'}")
-        print(f"🔴 Title         : {title[:50]}...")
-        print("-"*60)
-        
         # Normalize severity to AlarmSeverity enum
         if isinstance(severity, str):
             severity_upper = severity.upper()
-            print(f"🔴 String -> Upper: '{severity_upper}'")
             
-            # ★★★ KESİN ÇÖZÜM: Manuel mapping ★★★
             if severity_upper == "CRITICAL":
                 severity = AlarmSeverity.CRITICAL
-                print(f"🔴✅ CRITICAL olarak eşlendi")
             elif severity_upper == "HIGH":
                 severity = AlarmSeverity.HIGH
-                print(f"🔴✅ HIGH olarak eşlendi")
             elif severity_upper == "MEDIUM":
                 severity = AlarmSeverity.MEDIUM
-                print(f"🔴✅ MEDIUM olarak eşlendi")
             elif severity_upper == "LOW":
                 severity = AlarmSeverity.LOW
-                print(f"🔴✅ LOW olarak eşlendi")
             elif severity_upper == "INFO":
                 severity = AlarmSeverity.INFO
-                print(f"🔴✅ INFO olarak eşlendi")
             else:
-                print(f"🔴❌ BİLİNMEYEN SEVERITY: '{severity}'")
-                print(f"🔴❌ Upper: '{severity_upper}'")
-                print(f"🔴❌ Beklenen: CRITICAL, HIGH, MEDIUM, LOW, INFO")
                 severity = AlarmSeverity.MEDIUM
-                print(f"🔴⚠️ MEDIUM varsayılan kullanıldı")
         
-        elif isinstance(severity, AlarmSeverity):
-            print(f"🔴 Zaten enum: {severity}")
-        else:
-            print(f"🔴❌ Geçersiz tip: {type(severity)}")
+        elif not isinstance(severity, AlarmSeverity):
             severity = AlarmSeverity.MEDIUM
         
-        print(f"🔴 Sonuç Severity: {severity}")
-        print("="*60 + "\n")
+        # Check whitelist for MAC+Port alarms
+        if mac_address and port_number:
+            whitelisted = self._check_whitelist(session, device.name, port_number, mac_address)
+            if whitelisted:
+                self.logger.info(
+                    f"Alarm suppressed (whitelisted): {device.name} port {port_number} "
+                    f"MAC {mac_address}"
+                )
+                return None, False
         
-        # ALWAYS CREATE NEW ALARM - Don't deduplicate
-        # This allows multiple alarms for same port with different changes
-        print(f"🔴 Creating new alarm (no deduplication)...")
+        # Create alarm fingerprint for uniqueness check
+        fingerprint = self._create_alarm_fingerprint(
+            device.name, port_number, mac_address, from_port, to_port, alarm_type
+        )
         
+        # Check for existing active alarm with same fingerprint
+        existing_alarm = session.query(Alarm).filter(
+            Alarm.device_id == device.id,
+            Alarm.alarm_type == alarm_type,
+            Alarm.status == AlarmStatus.ACTIVE,
+            Alarm.alarm_fingerprint == fingerprint
+        ).first()
+        
+        if existing_alarm:
+            # Update existing alarm - increment counter and update last_occurrence
+            existing_alarm.occurrence_count += 1
+            existing_alarm.last_occurrence = datetime.utcnow()
+            existing_alarm.updated_at = datetime.utcnow()
+            
+            self.logger.info(
+                f"Updated existing alarm #{existing_alarm.id}: "
+                f"count={existing_alarm.occurrence_count}"
+            )
+            return existing_alarm, False
+        
+        # Create new alarm
         alarm = Alarm(
             device_id=device.id,
             alarm_type=alarm_type,
@@ -325,7 +343,12 @@ class DatabaseManager:
             title=title,
             message=message,
             port_number=port_number,
-            status=AlarmStatus.ACTIVE
+            mac_address=mac_address,
+            from_port=from_port,
+            to_port=to_port,
+            alarm_fingerprint=fingerprint,
+            status=AlarmStatus.ACTIVE,
+            occurrence_count=1
         )
         session.add(alarm)
         session.flush()
@@ -340,8 +363,67 @@ class DatabaseManager:
         )
         session.add(history)
         
-        print(f"🔴✅ New alarm created: ID={alarm.id}")
+        self.logger.info(f"New alarm created: ID={alarm.id}, fingerprint={fingerprint}")
         return alarm, True
+    
+    def _create_alarm_fingerprint(
+        self,
+        device_name: str,
+        port_number: Optional[int],
+        mac_address: Optional[str],
+        from_port: Optional[int],
+        to_port: Optional[int],
+        alarm_type: str
+    ) -> str:
+        """
+        Create unique fingerprint for alarm.
+        
+        Fingerprint format: device_name|port|mac|from_port|to_port|type
+        """
+        parts = [
+            device_name or "",
+            str(port_number) if port_number else "",
+            mac_address or "",
+            str(from_port) if from_port else "",
+            str(to_port) if to_port else "",
+            alarm_type or ""
+        ]
+        return "|".join(parts)
+    
+    def _check_whitelist(
+        self,
+        session: Session,
+        device_name: str,
+        port_number: int,
+        mac_address: str
+    ) -> bool:
+        """
+        Check if device+port+mac combination is whitelisted.
+        
+        Returns True if whitelisted (alarm should be suppressed).
+        """
+        try:
+            # Use raw SQL since acknowledged_port_mac table may not have SQLAlchemy model yet
+            query = """
+                SELECT COUNT(*) as count
+                FROM acknowledged_port_mac
+                WHERE device_name = :device_name
+                AND port_number = :port_number
+                AND mac_address = :mac_address
+            """
+            result = session.execute(
+                query,
+                {
+                    'device_name': device_name,
+                    'port_number': port_number,
+                    'mac_address': mac_address
+                }
+            ).fetchone()
+            
+            return result[0] > 0 if result else False
+        except Exception as e:
+            self.logger.warning(f"Whitelist check failed: {e}")
+            return False
     
     def resolve_alarm(
         self,
