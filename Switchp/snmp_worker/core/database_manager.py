@@ -248,10 +248,14 @@ class DatabaseManager:
         severity: Union[AlarmSeverity, str],
         title: str,
         message: str,
-        port_number: Optional[int] = None
+        port_number: Optional[int] = None,
+        old_value: Optional[str] = None,
+        new_value: Optional[str] = None,
+        mac_address: Optional[str] = None
     ) -> tuple[Alarm, bool]:
         """
         Get existing active alarm or create new one.
+        Only creates new alarm if details are different from latest active alarm.
         
         Args:
             session: Database session
@@ -261,63 +265,77 @@ class DatabaseManager:
             title: Alarm title
             message: Alarm message
             port_number: Port number (for port-specific alarms)
+            old_value: Old value (for change tracking)
+            new_value: New value (for change tracking)
+            mac_address: MAC address (for MAC-related alarms)
             
         Returns:
             Tuple of (Alarm instance, is_new)
         """
-        # ★★★ FORCE DEBUG - Her zaman konsola yazdır ★★★
-        print("\n" + "="*60)
-        print("🔴🔴🔴 ALARM DEBUG - DATABASE MANAGER")
-        print("="*60)
-        print(f"🔴 Çağrı Tipi    : {alarm_type}")
-        print(f"🔴 Gelen Severity: '{severity}'")
-        print(f"🔴 Severity Tipi : {type(severity).__name__}")
-        print(f"🔴 Device        : {device.name} ({device.ip_address})")
-        print(f"🔴 Port          : {port_number if port_number else 'N/A'}")
-        print(f"🔴 Title         : {title[:50]}...")
-        print("-"*60)
-        
         # Normalize severity to AlarmSeverity enum
         if isinstance(severity, str):
             severity_upper = severity.upper()
-            print(f"🔴 String -> Upper: '{severity_upper}'")
             
-            # ★★★ KESİN ÇÖZÜM: Manuel mapping ★★★
+            # Manual mapping
             if severity_upper == "CRITICAL":
                 severity = AlarmSeverity.CRITICAL
-                print(f"🔴✅ CRITICAL olarak eşlendi")
             elif severity_upper == "HIGH":
                 severity = AlarmSeverity.HIGH
-                print(f"🔴✅ HIGH olarak eşlendi")
             elif severity_upper == "MEDIUM":
                 severity = AlarmSeverity.MEDIUM
-                print(f"🔴✅ MEDIUM olarak eşlendi")
             elif severity_upper == "LOW":
                 severity = AlarmSeverity.LOW
-                print(f"🔴✅ LOW olarak eşlendi")
             elif severity_upper == "INFO":
                 severity = AlarmSeverity.INFO
-                print(f"🔴✅ INFO olarak eşlendi")
             else:
-                print(f"🔴❌ BİLİNMEYEN SEVERITY: '{severity}'")
-                print(f"🔴❌ Upper: '{severity_upper}'")
-                print(f"🔴❌ Beklenen: CRITICAL, HIGH, MEDIUM, LOW, INFO")
                 severity = AlarmSeverity.MEDIUM
-                print(f"🔴⚠️ MEDIUM varsayılan kullanıldı")
         
-        elif isinstance(severity, AlarmSeverity):
-            print(f"🔴 Zaten enum: {severity}")
-        else:
-            print(f"🔴❌ Geçersiz tip: {type(severity)}")
+        elif not isinstance(severity, AlarmSeverity):
             severity = AlarmSeverity.MEDIUM
         
-        print(f"🔴 Sonuç Severity: {severity}")
-        print("="*60 + "\n")
+        # Check for existing ACTIVE alarm with same type and port
+        query = session.query(Alarm).filter(
+            and_(
+                Alarm.device_id == device.id,
+                Alarm.alarm_type == alarm_type,
+                Alarm.status == AlarmStatus.ACTIVE
+            )
+        )
         
-        # ALWAYS CREATE NEW ALARM - Don't deduplicate
-        # This allows multiple alarms for same port with different changes
-        print(f"🔴 Creating new alarm (no deduplication)...")
+        if port_number is not None:
+            query = query.filter(Alarm.port_number == port_number)
         
+        # Get the most recent alarm
+        existing_alarm = query.order_by(Alarm.created_at.desc()).first()
+        
+        # If there's an existing alarm, check if details are different
+        if existing_alarm:
+            # Compare old_value and new_value to determine if this is a different change
+            details_changed = False
+            
+            if old_value is not None and new_value is not None:
+                # Check if the change details are different
+                if existing_alarm.old_value != old_value or existing_alarm.new_value != new_value:
+                    details_changed = True
+                    self.logger.info(
+                        f"Creating new alarm - details changed: "
+                        f"Old: ({existing_alarm.old_value} -> {existing_alarm.new_value}), "
+                        f"New: ({old_value} -> {new_value})"
+                    )
+            
+            if not details_changed:
+                # Same change - just increment occurrence count
+                existing_alarm.occurrence_count += 1
+                existing_alarm.last_occurrence = datetime.utcnow()
+                existing_alarm.updated_at = datetime.utcnow()
+                
+                self.logger.info(
+                    f"Updated existing alarm (ID={existing_alarm.id}), "
+                    f"occurrence_count={existing_alarm.occurrence_count}"
+                )
+                return existing_alarm, False
+        
+        # Create new alarm (either no existing alarm or details are different)
         alarm = Alarm(
             device_id=device.id,
             alarm_type=alarm_type,
@@ -325,7 +343,10 @@ class DatabaseManager:
             title=title,
             message=message,
             port_number=port_number,
-            status=AlarmStatus.ACTIVE
+            status=AlarmStatus.ACTIVE,
+            old_value=old_value,
+            new_value=new_value,
+            mac_address=mac_address
         )
         session.add(alarm)
         session.flush()
@@ -340,7 +361,7 @@ class DatabaseManager:
         )
         session.add(history)
         
-        print(f"🔴✅ New alarm created: ID={alarm.id}")
+        self.logger.info(f"Created new alarm: ID={alarm.id}, type={alarm_type}, port={port_number}")
         return alarm, True
     
     def resolve_alarm(
