@@ -34,6 +34,14 @@ try {
             acknowledgeAlarm($conn, $auth, $alarmId, $ackType, $note);
             break;
             
+        case 'bulk_acknowledge':
+            // Bulk acknowledge multiple alarms
+            $alarmIds = isset($_REQUEST['alarm_ids']) ? $_REQUEST['alarm_ids'] : [];
+            $ackType = isset($_REQUEST['ack_type']) ? $_REQUEST['ack_type'] : 'known_change';
+            $note = isset($_REQUEST['note']) ? $_REQUEST['note'] : '';
+            bulkAcknowledgeAlarms($conn, $auth, $alarmIds, $ackType, $note);
+            break;
+            
         case 'silence_alarm':
             // Accept both GET and POST for compatibility
             $alarmId = isset($_REQUEST['alarm_id']) ? intval($_REQUEST['alarm_id']) : 0;
@@ -61,6 +69,12 @@ try {
             $hours = isset($_GET['hours']) ? intval($_GET['hours']) : 24;
             getRecentlyChangedPorts($conn, $hours);
             break;
+        
+        case 'create_description_alarm':
+            // Create alarm when port description is manually changed via web UI
+            $data = json_decode(file_get_contents("php://input"), true);
+            createDescriptionChangeAlarm($conn, $data);
+            break;
             
         default:
             throw new Exception('Invalid action');
@@ -78,12 +92,24 @@ try {
  * Get active alarms with port change details
  */
 function getActiveAlarms($conn) {
-    $sql = "SELECT 
-                a.id, a.device_id, a.alarm_type, a.severity, a.status,
+    // Check if from_port and to_port columns exist (backwards compatibility)
+    $columns_to_select = "a.id, a.device_id, a.alarm_type, a.severity, a.status,
                 a.port_number, a.title, a.message, a.details,
                 a.occurrence_count, a.first_occurrence, a.last_occurrence,
                 a.acknowledged_at, a.acknowledged_by, a.acknowledgment_type,
-                a.silence_until, a.mac_address, a.old_value, a.new_value,
+                a.silence_until, a.mac_address, a.old_value, a.new_value";
+    
+    // Try to check if columns exist
+    $result = $conn->query("SHOW COLUMNS FROM alarms LIKE 'from_port'");
+    if ($result && $result->num_rows > 0) {
+        $columns_to_select .= ", a.from_port, a.to_port";
+    } else {
+        // Columns don't exist yet, use NULL
+        $columns_to_select .= ", NULL as from_port, NULL as to_port";
+    }
+    
+    $sql = "SELECT 
+                $columns_to_select,
                 d.name as device_name, d.ip_address as device_ip,
                 CASE 
                     WHEN a.silence_until > NOW() THEN 1
@@ -95,7 +121,7 @@ function getActiveAlarms($conn) {
                 END as is_port_change
             FROM alarms a
             LEFT JOIN snmp_devices d ON a.device_id = d.id
-            WHERE a.status = 'active'
+            WHERE a.status = 'ACTIVE'
             ORDER BY 
                 CASE a.severity
                     WHEN 'CRITICAL' THEN 1
@@ -196,7 +222,7 @@ function acknowledgeAlarm($conn, $auth, $alarmId, $ackType, $note) {
             // Mark as acknowledged
             $stmt = $conn->prepare("
                 UPDATE alarms 
-                SET status = 'acknowledged',
+                SET status = 'ACKNOWLEDGED',
                     acknowledged_at = NOW(),
                     acknowledged_by = ?,
                     acknowledgment_type = 'known_change',
@@ -205,6 +231,19 @@ function acknowledgeAlarm($conn, $auth, $alarmId, $ackType, $note) {
             ");
             $stmt->bind_param("si", $user['username'], $alarmId);
             $stmt->execute();
+            
+            // Add to whitelist if MAC address and port are present
+            if (!empty($alarm['mac_address']) && !empty($alarm['port_number'])) {
+                $deviceName = getDeviceName($conn, $alarm['device_id']);
+                addToWhitelist(
+                    $conn,
+                    $deviceName,
+                    $alarm['port_number'],
+                    $alarm['mac_address'],
+                    $user['username'],
+                    $note
+                );
+            }
             
             // Add to alarm history
             $stmt = $conn->prepare("
@@ -220,7 +259,7 @@ function acknowledgeAlarm($conn, $auth, $alarmId, $ackType, $note) {
             // Mark as resolved
             $stmt = $conn->prepare("
                 UPDATE alarms 
-                SET status = 'resolved',
+                SET status = 'RESOLVED',
                     resolved_at = NOW(),
                     resolved_by = ?,
                     updated_at = NOW()
@@ -485,4 +524,355 @@ function getAlarmDetails($conn, $alarmId) {
         'alarm' => $alarm
     ]);
 }
+
+/**
+ * Get device name by ID
+ */
+function getDeviceName($conn, $deviceId) {
+    $stmt = $conn->prepare("SELECT name FROM snmp_devices WHERE id = ?");
+    $stmt->bind_param("i", $deviceId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $row = $result->fetch_assoc();
+    return $row ? $row['name'] : '';
+}
+
+/**
+ * Add MAC+Port combination to whitelist
+ */
+function addToWhitelist($conn, $deviceName, $portNumber, $macAddress, $acknowledgedBy, $note) {
+    try {
+        // Check if already whitelisted
+        $stmt = $conn->prepare("
+            SELECT id FROM acknowledged_port_mac
+            WHERE device_name = ? AND port_number = ? AND mac_address = ?
+        ");
+        $stmt->bind_param("sis", $deviceName, $portNumber, $macAddress);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        
+        if ($result->num_rows > 0) {
+            // Already whitelisted, update note
+            $stmt = $conn->prepare("
+                UPDATE acknowledged_port_mac
+                SET note = ?, acknowledged_by = ?, updated_at = NOW()
+                WHERE device_name = ? AND port_number = ? AND mac_address = ?
+            ");
+            $stmt->bind_param("sssis", $note, $acknowledgedBy, $deviceName, $portNumber, $macAddress);
+            $stmt->execute();
+        } else {
+            // Add to whitelist
+            $stmt = $conn->prepare("
+                INSERT INTO acknowledged_port_mac
+                (device_name, port_number, mac_address, acknowledged_by, note)
+                VALUES (?, ?, ?, ?, ?)
+            ");
+            $stmt->bind_param("sisss", $deviceName, $portNumber, $macAddress, $acknowledgedBy, $note);
+            $stmt->execute();
+        }
+        
+        return true;
+    } catch (Exception $e) {
+        error_log("Failed to add to whitelist: " . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Bulk acknowledge multiple alarms
+ */
+function bulkAcknowledgeAlarms($conn, $auth, $alarmIds, $ackType, $note) {
+    $user = $auth->getUser();
+    
+    // Parse alarm IDs if it's a JSON string
+    if (is_string($alarmIds)) {
+        $alarmIds = json_decode($alarmIds, true);
+    }
+    
+    if (!is_array($alarmIds) || empty($alarmIds)) {
+        echo json_encode([
+            'success' => false,
+            'error' => 'No alarm IDs provided'
+        ]);
+        return;
+    }
+    
+    $conn->begin_transaction();
+    
+    try {
+        $successCount = 0;
+        $failedCount = 0;
+        
+        foreach ($alarmIds as $alarmId) {
+            $alarmId = intval($alarmId);
+            if ($alarmId <= 0) {
+                $failedCount++;
+                continue;
+            }
+            
+            // Get alarm
+            $stmt = $conn->prepare("SELECT * FROM alarms WHERE id = ?");
+            $stmt->bind_param("i", $alarmId);
+            $stmt->execute();
+            $alarm = $stmt->get_result()->fetch_assoc();
+            
+            if (!$alarm) {
+                $failedCount++;
+                continue;
+            }
+            
+            // Mark as acknowledged
+            $stmt = $conn->prepare("
+                UPDATE alarms 
+                SET status = 'ACKNOWLEDGED',
+                    acknowledged_at = NOW(),
+                    acknowledged_by = ?,
+                    acknowledgment_type = ?,
+                    updated_at = NOW()
+                WHERE id = ?
+            ");
+            $stmt->bind_param("ssi", $user['username'], $ackType, $alarmId);
+            $stmt->execute();
+            
+            // Add to whitelist if MAC address and port are present
+            if (!empty($alarm['mac_address']) && !empty($alarm['port_number'])) {
+                $deviceName = getDeviceName($conn, $alarm['device_id']);
+                addToWhitelist(
+                    $conn,
+                    $deviceName,
+                    $alarm['port_number'],
+                    $alarm['mac_address'],
+                    $user['username'],
+                    $note
+                );
+            }
+            
+            // Add to alarm history
+            $stmt = $conn->prepare("
+                INSERT INTO alarm_history 
+                (alarm_id, old_status, new_status, change_reason, change_message, changed_at)
+                VALUES (?, 'ACTIVE', 'ACKNOWLEDGED', 'Bulk acknowledged by user', ?, NOW())
+            ");
+            $message = "Bulk acknowledged by {$user['username']}: $note";
+            $stmt->bind_param("is", $alarmId, $message);
+            $stmt->execute();
+            
+            $successCount++;
+        }
+        
+        // Log activity
+        $auth->logActivity(
+            $user['id'],
+            $user['username'],
+            'bulk_alarm_acknowledge',
+            "Bulk acknowledged $successCount alarms"
+        );
+        
+        $conn->commit();
+        
+        echo json_encode([
+            'success' => true,
+            'message' => "$successCount alarms acknowledged successfully",
+            'acknowledged_count' => $successCount,
+            'failed_count' => $failedCount
+        ]);
+        
+    } catch (Exception $e) {
+        $conn->rollback();
+        throw $e;
+    }
+}
+
+
+/**
+ * Create alarm for manual port description change
+ * Called when user updates port description via web UI
+ */
+function createDescriptionChangeAlarm($conn, $data) {
+    $switchId = isset($data['switchId']) ? intval($data['switchId']) : 0;
+    $portNo = isset($data['portNo']) ? intval($data['portNo']) : 0;
+    $oldDescription = isset($data['oldDescription']) ? trim($data['oldDescription']) : '';
+    $newDescription = isset($data['newDescription']) ? trim($data['newDescription']) : '';
+    
+    if ($switchId <= 0 || $portNo <= 0) {
+        throw new Exception("Invalid switch ID or port number");
+    }
+    
+    // Get switch info from switches table
+    $switchStmt = $conn->prepare("SELECT name, ip FROM switches WHERE id = ?");
+    $switchStmt->bind_param("i", $switchId);
+    $switchStmt->execute();
+    $switchResult = $switchStmt->get_result();
+    $switch = $switchResult->fetch_assoc();
+    $switchStmt->close();
+    
+    if (!$switch) {
+        throw new Exception("Switch not found");
+    }
+    
+    $deviceName = $switch['name'];
+    $deviceIp = $switch['ip'];
+    
+    // Get SNMP device_id (may not exist if switch not in SNMP system)
+    $snmpDeviceId = null;
+    $snmpStmt = $conn->prepare("SELECT id FROM snmp_devices WHERE ip_address = ?");
+    $snmpStmt->bind_param("s", $deviceIp);
+    $snmpStmt->execute();
+    $snmpResult = $snmpStmt->get_result();
+    if ($snmpRow = $snmpResult->fetch_assoc()) {
+        $snmpDeviceId = $snmpRow['id'];
+    }
+    $snmpStmt->close();
+    
+    if (!$snmpDeviceId) {
+        // No SNMP device - can't create alarm in SNMP system
+        echo json_encode([
+            'success' => false,
+            'message' => 'Switch not configured in SNMP system',
+            'info' => 'Description updated but alarm not created (switch not in SNMP monitoring)'
+        ]);
+        return;
+    }
+    
+    // Create alarm message
+    $title = "Port $portNo açıklaması değişti";
+    $oldDesc = $oldDescription ?: '(boş)';
+    $newDesc = $newDescription ?: '(boş)';
+    $message = "Port $portNo ($deviceName) açıklaması manuel olarak değiştirildi.\n\n";
+    $message .= "Eski değer: '$oldDesc'\n";
+    $message .= "Yeni değer: '$newDesc'";
+    
+    // Check if similar alarm exists (within last hour) - avoid duplicates
+    $checkStmt = $conn->prepare("
+        SELECT id, occurrence_count FROM alarms 
+        WHERE device_id = ? 
+        AND port_number = ? 
+        AND alarm_type = 'description_changed'
+        AND status = 'ACTIVE'
+        AND first_occurrence > DATE_SUB(NOW(), INTERVAL 1 HOUR)
+        LIMIT 1
+    ");
+    $checkStmt->bind_param("ii", $snmpDeviceId, $portNo);
+    $checkStmt->execute();
+    $checkResult = $checkStmt->get_result();
+    
+    if ($existingAlarm = $checkResult->fetch_assoc()) {
+        // Update existing alarm - increment counter
+        $updateStmt = $conn->prepare("
+            UPDATE alarms 
+            SET occurrence_count = occurrence_count + 1,
+                last_occurrence = NOW(),
+                message = ?,
+                new_value = ?,
+                updated_at = NOW()
+            WHERE id = ?
+        ");
+        $updateStmt->bind_param("ssi", $message, $newDescription, $existingAlarm['id']);
+        $updateStmt->execute();
+        $updateStmt->close();
+        
+        $checkStmt->close();
+        
+        echo json_encode([
+            'success' => true,
+            'message' => 'Existing alarm updated',
+            'alarm_id' => $existingAlarm['id'],
+            'action' => 'updated'
+        ]);
+    } else {
+        // Create new alarm
+        $checkStmt->close();
+        
+        $insertStmt = $conn->prepare("
+            INSERT INTO alarms (
+                device_id, 
+                port_number, 
+                alarm_type, 
+                severity, 
+                status,
+                title, 
+                message,
+                old_value,
+                new_value,
+                first_occurrence,
+                last_occurrence,
+                occurrence_count,
+                created_at,
+                updated_at
+            ) VALUES (?, ?, 'description_changed', 'MEDIUM', 'ACTIVE', ?, ?, ?, ?, NOW(), NOW(), 1, NOW(), NOW())
+        ");
+        $insertStmt->bind_param("iissss", 
+            $snmpDeviceId, 
+            $portNo, 
+            $title, 
+            $message,
+            $oldDescription,
+            $newDescription
+        );
+        
+        if ($insertStmt->execute()) {
+            $alarmId = $insertStmt->insert_id;
+            $insertStmt->close();
+            
+            // Update port_status_data table to sync description
+            try {
+                $syncStmt = $conn->prepare("
+                    UPDATE port_status_data 
+                    SET port_alias = ?,
+                        last_seen = NOW()
+                    WHERE device_id = ? AND port_number = ?
+                ");
+                $syncStmt->bind_param("sii", $newDescription, $snmpDeviceId, $portNo);
+                $syncStmt->execute();
+                $syncStmt->close();
+            } catch (Exception $e) {
+                // Table might not exist or no row - not critical
+                error_log("Could not sync port_status_data: " . $e->getMessage());
+            }
+            
+            // Record in port_change_history
+            try {
+                $changeDetails = "Port $portNo açıklaması manuel olarak değiştirildi: '$oldDesc' → '$newDesc'";
+                
+                $historyStmt = $conn->prepare("
+                    INSERT INTO port_change_history (
+                        device_id,
+                        port_number,
+                        change_type,
+                        change_timestamp,
+                        old_description,
+                        new_description,
+                        change_details,
+                        alarm_created,
+                        alarm_id
+                    ) VALUES (?, ?, 'DESCRIPTION_CHANGED', NOW(), ?, ?, ?, 1, ?)
+                ");
+                $historyStmt->bind_param("iisssi", 
+                    $snmpDeviceId, 
+                    $portNo, 
+                    $oldDescription, 
+                    $newDescription, 
+                    $changeDetails,
+                    $alarmId
+                );
+                $historyStmt->execute();
+                $historyStmt->close();
+            } catch (Exception $e) {
+                // Table might not exist - not critical
+                error_log("Could not record change history: " . $e->getMessage());
+            }
+            
+            echo json_encode([
+                'success' => true,
+                'message' => 'Alarm created successfully',
+                'alarm_id' => $alarmId,
+                'action' => 'created'
+            ]);
+        } else {
+            throw new Exception("Failed to create alarm: " . $conn->error);
+        }
+    }
+}
+
+
 
