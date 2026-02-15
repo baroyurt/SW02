@@ -10,9 +10,27 @@ header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE');
 header('Access-Control-Allow-Headers: Content-Type');
 
 require_once 'config.php';
+require_once 'db.php';
+require_once 'auth.php';
 
-// Database connection
+// Initialize authentication
+$auth = new Auth($conn);
+
+// Get authenticated user
+function getAuthenticatedUser($auth) {
+    if ($auth->isLoggedIn()) {
+        $user = $auth->getUser();
+        return $user['username'] ?? 'system';
+    }
+    return 'system';
+}
+
+// Database connection (reuse existing connection from db.php)
 function getDBConnection() {
+    global $conn;
+    if ($conn && $conn->ping()) {
+        return $conn;
+    }
     $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
     if ($conn->connect_error) {
         die(json_encode(['error' => 'Database connection failed: ' . $conn->connect_error]));
@@ -69,8 +87,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['excel_file'])) {
         $sheet = $spreadsheet->getActiveSheet();
         $rows = $sheet->toArray();
         
-        // Skip header row
+        // Get header row to detect format
         $header = array_shift($rows);
+        
+        // Detect format based on header row
+        // New format: "IP Adresi" or similar in first column
+        // Old format: "MAC" or similar in first column
+        $is_new_format = false;
+        
+        if (!empty($header)) {
+            $first_header = strtolower(trim($header[0] ?? ''));
+            // Check if first column is IP-related (new format) or MAC-related (old format)
+            if (strpos($first_header, 'ip') !== false || count($header) <= 3) {
+                $is_new_format = true;
+            }
+        }
         
         $conn = getDBConnection();
         $success_count = 0;
@@ -99,13 +130,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['excel_file'])) {
             foreach ($rows as $index => $row) {
                 $row_num = $index + 2; // +2 for header and 0-index
                 
-                // Detect format: Check if we have the new format (IP, Hostname, MAC) or old format
-                // New format: Column 0 = IP, Column 1 = Hostname, Column 2 = MAC (3 columns)
-                // Old format: Column 0 = MAC, Column 1 = IP, Column 2 = Device Name, ... (7 columns)
-                
-                $column_count = count(array_filter($row, function($val) { return $val !== null && $val !== ''; }));
-                
-                if ($column_count <= 3) {
+                // Parse based on detected format
+                if ($is_new_format) {
                     // New simplified format: IP Adresi | Hostname | MAC Adresi
                     $ip = isset($row[0]) ? trim($row[0]) : null;
                     $device_name = isset($row[1]) ? trim($row[1]) : null;
@@ -145,10 +171,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['excel_file'])) {
                 }
                 
                 // Insert/Update
+                $created_by = getAuthenticatedUser($auth);
                 $stmt->bind_param(
                     'ssssssss',
                     $mac, $ip, $device_name, $user_name, 
-                    $location, $department, $notes, $_SERVER['REMOTE_USER'] ?? 'system'
+                    $location, $department, $notes, $created_by
                 );
                 
                 if ($stmt->execute()) {
@@ -170,7 +197,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['excel_file'])) {
             
             $total_rows = count($rows);
             $errors_json = json_encode($errors);
-            $imported_by = $_SERVER['REMOTE_USER'] ?? 'system';
+            $imported_by = getAuthenticatedUser($auth);
             
             $stmt_history->bind_param(
                 'siiiss',
@@ -366,7 +393,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_FILES['excel_file'])) {
                     updated_by = VALUES(created_by)
             ");
             
-            $created_by = $_SERVER['REMOTE_USER'] ?? 'system';
+            $created_by = getAuthenticatedUser($auth);
             $stmt->bind_param('ssss', $mac, $ip, $hostname, $created_by);
             
             if ($stmt->execute()) {

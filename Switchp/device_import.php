@@ -362,7 +362,7 @@ $currentUser = $auth->getUser();
                         <li>Column 2: <strong>Hostname</strong></li>
                         <li>Column 3: <strong>MAC Adresi</strong> (MAC Address)</li>
                     </ol>
-                    <p style="margin-top: 10px;">Example: <code>172.18.50.15 | 330SN-504DE5 | 58:38:79:50:4D:E5</code></p>
+                    <p style="margin-top: 10px;">Example: <code>192.0.2.10 | TEST-PC-01 | 00:11:22:33:44:55</code></p>
                 </div>
                 
                 <div class="template-download">
@@ -395,21 +395,21 @@ $currentUser = $auth->getUser();
                         <label for="ip-address">
                             <i class="fas fa-network-wired"></i> IP Address
                         </label>
-                        <input type="text" id="ip-address" placeholder="e.g., 172.18.50.15" required>
+                        <input type="text" id="ip-address" placeholder="e.g., 192.0.2.10" required>
                     </div>
                     
                     <div class="form-group">
                         <label for="hostname">
                             <i class="fas fa-server"></i> Hostname
                         </label>
-                        <input type="text" id="hostname" placeholder="e.g., 330SN-504DE5" required>
+                        <input type="text" id="hostname" placeholder="e.g., TEST-PC-01" required>
                     </div>
                     
                     <div class="form-group">
                         <label for="mac-address">
                             <i class="fas fa-ethernet"></i> MAC Address
                         </label>
-                        <input type="text" id="mac-address" placeholder="e.g., 58:38:79:50:4D:E5" required>
+                        <input type="text" id="mac-address" placeholder="e.g., 00:11:22:33:44:55" required>
                     </div>
                     
                     <button type="submit" class="btn btn-success" style="width: 100%;">
@@ -571,10 +571,10 @@ $currentUser = $auth->getUser();
             const hostname = document.getElementById('hostname').value.trim();
             const macAddress = document.getElementById('mac-address').value.trim();
             
-            // Client-side validation
-            const ipPattern = /^(\d{1,3}\.){3}\d{1,3}$/;
+            // Client-side validation with proper IP octet range check
+            const ipPattern = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
             if (!ipPattern.test(ipAddress)) {
-                showManualResult('error', 'Invalid IP address format');
+                showManualResult('error', 'Invalid IP address format (each octet must be 0-255)');
                 return;
             }
             
@@ -659,8 +659,8 @@ $currentUser = $auth->getUser();
         }
         
         function downloadTemplate() {
-            // Create a simple CSV template
-            const csvContent = "IP Adresi,Hostname,MAC Adresi\n172.18.50.15,330SN-504DE5,58:38:79:50:4D:E5\n172.18.131.7,307,b0:b3:69:31:2c:3d\n";
+            // Create a simple CSV template with RFC 5737 test addresses
+            const csvContent = "IP Adresi,Hostname,MAC Adresi\n192.0.2.10,TEST-PC-01,00:11:22:33:44:55\n192.0.2.20,TEST-SW-02,AA:BB:CC:DD:EE:FF\n";
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement("a");
             const url = URL.createObjectURL(blob);
