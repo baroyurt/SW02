@@ -8159,7 +8159,32 @@ ${alarm.is_silenced ? `Sesize Alındı: ${alarm.silence_until} saate kadar\n` : 
             try {
                 // Check for new alarms
                 const response = await fetch(`snmp_realtime_api.php?action=check_new_alarms&last_check=${encodeURIComponent(lastAlarmCheck)}`);
-                const data = await response.json();
+                
+                // Check if response is OK (status 200-299)
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        console.warn('⚠️ Session expired, please reload the page');
+                        clearInterval(updateInterval);
+                        return;
+                    }
+                    console.warn(`API returned status ${response.status}`);
+                    return;
+                }
+                
+                // Get response text first to handle empty responses
+                const text = await response.text();
+                if (!text || text.trim() === '') {
+                    return; // Empty response, nothing to process
+                }
+                
+                // Parse JSON safely
+                let data;
+                try {
+                    data = JSON.parse(text);
+                } catch (jsonError) {
+                    console.error('Invalid JSON response from API:', text.substring(0, 200));
+                    return;
+                }
                 
                 if (data.success) {
                     // Update last check timestamp
@@ -8191,7 +8216,29 @@ ${alarm.is_silenced ? `Sesize Alındı: ${alarm.silence_until} saate kadar\n` : 
         async function updateAlarmCount() {
             try {
                 const response = await fetch('snmp_realtime_api.php?action=get_alarm_count');
-                const data = await response.json();
+                
+                // Check if response is OK
+                if (!response.ok) {
+                    if (response.status !== 401) { // Don't log 401s (handled in checkForUpdates)
+                        console.warn(`Alarm count API returned status ${response.status}`);
+                    }
+                    return;
+                }
+                
+                // Get response text first
+                const text = await response.text();
+                if (!text || text.trim() === '') {
+                    return;
+                }
+                
+                // Parse JSON safely
+                let data;
+                try {
+                    data = JSON.parse(text);
+                } catch (jsonError) {
+                    console.error('Invalid JSON in alarm count response:', text.substring(0, 100));
+                    return;
+                }
                 
                 if (data.success && data.counts) {
                     const total = parseInt(data.counts.total) || 0;
