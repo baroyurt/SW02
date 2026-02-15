@@ -69,6 +69,12 @@ try {
             $hours = isset($_GET['hours']) ? intval($_GET['hours']) : 24;
             getRecentlyChangedPorts($conn, $hours);
             break;
+        
+        case 'create_description_alarm':
+            // Create alarm when port description is manually changed via web UI
+            $data = json_decode(file_get_contents("php://input"), true);
+            createDescriptionChangeAlarm($conn, $data);
+            break;
             
         default:
             throw new Exception('Invalid action');
@@ -674,6 +680,197 @@ function bulkAcknowledgeAlarms($conn, $auth, $alarmIds, $ackType, $note) {
     } catch (Exception $e) {
         $conn->rollback();
         throw $e;
+    }
+}
+
+
+/**
+ * Create alarm for manual port description change
+ * Called when user updates port description via web UI
+ */
+function createDescriptionChangeAlarm($conn, $data) {
+    $switchId = isset($data['switchId']) ? intval($data['switchId']) : 0;
+    $portNo = isset($data['portNo']) ? intval($data['portNo']) : 0;
+    $oldDescription = isset($data['oldDescription']) ? trim($data['oldDescription']) : '';
+    $newDescription = isset($data['newDescription']) ? trim($data['newDescription']) : '';
+    
+    if ($switchId <= 0 || $portNo <= 0) {
+        throw new Exception("Invalid switch ID or port number");
+    }
+    
+    // Get switch info from switches table
+    $switchStmt = $conn->prepare("SELECT name, ip FROM switches WHERE id = ?");
+    $switchStmt->bind_param("i", $switchId);
+    $switchStmt->execute();
+    $switchResult = $switchStmt->get_result();
+    $switch = $switchResult->fetch_assoc();
+    $switchStmt->close();
+    
+    if (!$switch) {
+        throw new Exception("Switch not found");
+    }
+    
+    $deviceName = $switch['name'];
+    $deviceIp = $switch['ip'];
+    
+    // Get SNMP device_id (may not exist if switch not in SNMP system)
+    $snmpDeviceId = null;
+    $snmpStmt = $conn->prepare("SELECT id FROM snmp_devices WHERE ip_address = ?");
+    $snmpStmt->bind_param("s", $deviceIp);
+    $snmpStmt->execute();
+    $snmpResult = $snmpStmt->get_result();
+    if ($snmpRow = $snmpResult->fetch_assoc()) {
+        $snmpDeviceId = $snmpRow['id'];
+    }
+    $snmpStmt->close();
+    
+    if (!$snmpDeviceId) {
+        // No SNMP device - can't create alarm in SNMP system
+        echo json_encode([
+            'success' => false,
+            'message' => 'Switch not configured in SNMP system',
+            'info' => 'Description updated but alarm not created (switch not in SNMP monitoring)'
+        ]);
+        return;
+    }
+    
+    // Create alarm message
+    $title = "Port $portNo açıklaması değişti";
+    $oldDesc = $oldDescription ?: '(boş)';
+    $newDesc = $newDescription ?: '(boş)';
+    $message = "Port $portNo ($deviceName) açıklaması manuel olarak değiştirildi.\n\n";
+    $message .= "Eski değer: '$oldDesc'\n";
+    $message .= "Yeni değer: '$newDesc'";
+    
+    // Check if similar alarm exists (within last hour) - avoid duplicates
+    $checkStmt = $conn->prepare("
+        SELECT id, occurrence_count FROM alarms 
+        WHERE device_id = ? 
+        AND port_number = ? 
+        AND alarm_type = 'description_changed'
+        AND status = 'ACTIVE'
+        AND first_occurrence > DATE_SUB(NOW(), INTERVAL 1 HOUR)
+        LIMIT 1
+    ");
+    $checkStmt->bind_param("ii", $snmpDeviceId, $portNo);
+    $checkStmt->execute();
+    $checkResult = $checkStmt->get_result();
+    
+    if ($existingAlarm = $checkResult->fetch_assoc()) {
+        // Update existing alarm - increment counter
+        $updateStmt = $conn->prepare("
+            UPDATE alarms 
+            SET occurrence_count = occurrence_count + 1,
+                last_occurrence = NOW(),
+                message = ?,
+                new_value = ?,
+                updated_at = NOW()
+            WHERE id = ?
+        ");
+        $updateStmt->bind_param("ssi", $message, $newDescription, $existingAlarm['id']);
+        $updateStmt->execute();
+        $updateStmt->close();
+        
+        $checkStmt->close();
+        
+        echo json_encode([
+            'success' => true,
+            'message' => 'Existing alarm updated',
+            'alarm_id' => $existingAlarm['id'],
+            'action' => 'updated'
+        ]);
+    } else {
+        // Create new alarm
+        $checkStmt->close();
+        
+        $insertStmt = $conn->prepare("
+            INSERT INTO alarms (
+                device_id, 
+                port_number, 
+                alarm_type, 
+                severity, 
+                status,
+                title, 
+                message,
+                old_value,
+                new_value,
+                first_occurrence,
+                last_occurrence,
+                occurrence_count,
+                created_at,
+                updated_at
+            ) VALUES (?, ?, 'description_changed', 'MEDIUM', 'ACTIVE', ?, ?, ?, ?, NOW(), NOW(), 1, NOW(), NOW())
+        ");
+        $insertStmt->bind_param("iissss", 
+            $snmpDeviceId, 
+            $portNo, 
+            $title, 
+            $message,
+            $oldDescription,
+            $newDescription
+        );
+        
+        if ($insertStmt->execute()) {
+            $alarmId = $insertStmt->insert_id;
+            $insertStmt->close();
+            
+            // Update port_status_data table to sync description
+            try {
+                $syncStmt = $conn->prepare("
+                    UPDATE port_status_data 
+                    SET port_alias = ?,
+                        last_seen = NOW()
+                    WHERE device_id = ? AND port_number = ?
+                ");
+                $syncStmt->bind_param("sii", $newDescription, $snmpDeviceId, $portNo);
+                $syncStmt->execute();
+                $syncStmt->close();
+            } catch (Exception $e) {
+                // Table might not exist or no row - not critical
+                error_log("Could not sync port_status_data: " . $e->getMessage());
+            }
+            
+            // Record in port_change_history
+            try {
+                $changeDetails = "Port $portNo açıklaması manuel olarak değiştirildi: '$oldDesc' → '$newDesc'";
+                
+                $historyStmt = $conn->prepare("
+                    INSERT INTO port_change_history (
+                        device_id,
+                        port_number,
+                        change_type,
+                        change_timestamp,
+                        old_description,
+                        new_description,
+                        change_details,
+                        alarm_created,
+                        alarm_id
+                    ) VALUES (?, ?, 'DESCRIPTION_CHANGED', NOW(), ?, ?, ?, 1, ?)
+                ");
+                $historyStmt->bind_param("iisssi", 
+                    $snmpDeviceId, 
+                    $portNo, 
+                    $oldDescription, 
+                    $newDescription, 
+                    $changeDetails,
+                    $alarmId
+                );
+                $historyStmt->execute();
+                $historyStmt->close();
+            } catch (Exception $e) {
+                // Table might not exist - not critical
+                error_log("Could not record change history: " . $e->getMessage());
+            }
+            
+            echo json_encode([
+                'success' => true,
+                'message' => 'Alarm created successfully',
+                'alarm_id' => $alarmId,
+                'action' => 'created'
+            ]);
+        } else {
+            throw new Exception("Failed to create alarm: " . $conn->error);
+        }
     }
 }
 
