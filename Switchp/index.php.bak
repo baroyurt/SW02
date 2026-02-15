@@ -6237,6 +6237,239 @@ if (isHub) {
             modal.classList.add('active');
         }
 
+        // Excel Import Function
+        async function importExcel(file) {
+            console.log('Excel import başlıyor:', file.name);
+            
+            try {
+                showLoading();
+                
+                // 1. Excel'i oku
+                const data = await readExcelFile(file);
+                console.log('Excel okundu:', data.length, 'switch');
+                
+                if (data.length === 0) {
+                    throw new Error('Excel dosyasında switch bulunamadı');
+                }
+                
+                // 2. Kullanıcı onayı
+                if (!confirm(`${data.length} switch işlenecek. Devam etmek istiyor musunuz?`)) {
+                    throw new Error('Import iptal edildi');
+                }
+                
+                // 3. DOSYA YOLUNU KONTROL EDİN
+                const importUrl = 'importExcel.php';
+                console.log('Import URL:', importUrl);
+                
+                const response = await fetch(importUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                // 4. Response'u kontrol et
+                const responseText = await response.text();
+                console.log('Response type:', response.headers.get('content-type'));
+                console.log('Response first 500 chars:', responseText.substring(0, 500));
+                
+                // Eğer HTML dönüyorsa hata ver
+                if (responseText.trim().startsWith('<!DOCTYPE') || 
+                    responseText.includes('<html') || 
+                    responseText.includes('Personel Arama')) {
+                    
+                    console.error('Wrong file response! Got HTML instead of JSON');
+                    
+                    // Doğru dosya yolunu bulmaya çalış
+                    const possiblePaths = [
+                        'importExcel.php',
+                        'final_import.php',
+                        'importExcel_fixed.php',
+                        'switchp/importExcel.php',
+                        'switchp/final_import.php',
+                        '/switchp/importExcel.php',
+                        './importExcel.php',
+                        './final_import.php'
+                    ];
+                    
+                    let correctPath = null;
+                    
+                    for (const path of possiblePaths) {
+                        try {
+                            const testResponse = await fetch(path, { method: 'HEAD' });
+                            if (testResponse.ok) {
+                                console.log('Found file at:', path);
+                                correctPath = path;
+                                break;
+                            }
+                        } catch (e) {
+                            console.log('Not found:', path);
+                        }
+                    }
+                    
+                    if (correctPath) {
+                        throw new Error(`Yanlış dosya yolu! Lütfen import işlemi için ${correctPath} dosyasını kullanın.`);
+                    } else {
+                        throw new Error('Import PHP dosyası bulunamadı. Lütfen dosya yolunu kontrol edin.');
+                    }
+                }
+                
+                let result;
+                try {
+                    result = JSON.parse(responseText);
+                } catch (parseError) {
+                    console.error('JSON parse error:', parseError);
+                    throw new Error('Sunucudan geçersiz JSON yanıtı alındı. PHP hatası olabilir.');
+                }
+                
+                // 5. Sonucu işle
+                if (result.status === 'ok') {
+                    showToast(`Import başarılı! ${data.length} switch eklendi.`, 'success', 8000);
+                    
+                    // Verileri yenile
+                    await loadData();
+                    
+                } else {
+                    throw new Error(result.message || 'Import hatası');
+                }
+                
+            } catch (error) {
+                console.error('Import hatası:', error);
+                showToast('Import hatası: ' + error.message, 'error');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        function readExcelFile(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                
+                reader.onload = function(e) {
+                    try {
+                        const data = new Uint8Array(e.target.result);
+                        const workbook = XLSX.read(data, { type: 'array' });
+                        
+                        const importData = [];
+                        
+                        workbook.SheetNames.forEach((sheetName, index) => {
+                            const switchName = sheetName.trim();
+                            if (!switchName) return;
+							
+							function normalizePortCount(maxPort) {
+    if (!maxPort) return 48;
+    if (maxPort <= 24) return 24;
+    if (maxPort <= 28) return 28; // 24 + 4 fiber
+    if (maxPort <= 48) return 48;
+    if (maxPort <= 52) return 52; // 48 + 4 fiber
+    return Math.ceil(maxPort / 4) * 4;
+}
+                            
+                            const worksheet = workbook.Sheets[sheetName];
+const jsonData = XLSX.utils.sheet_to_json(worksheet, { 
+    header: 1, 
+    defval: "",
+    raw: false 
+});
+
+// PORT SAYISINI HESAPLA
+let maxPort = 0;
+jsonData.forEach(row => {
+    if (row && row[0]) {
+        const portText = row[0].toString().trim();
+        const portMatch = portText.match(/\d+/);
+        if (portMatch) {
+            const portNo = parseInt(portMatch[0], 10);
+            if (portNo > maxPort) maxPort = portNo;
+        }
+    }
+});
+
+// Normalize edilmiş port sayısı (ör. Giga-28 -> 28, Giga-52 -> 52)
+const ports = normalizePortCount(maxPort);
+
+const portsData = [];
+
+// Port verilerini işle (ör. Port, Description, IP, MAC, Connection)
+jsonData.forEach(row => {
+    if (!row || row.length < 1) return;
+    
+    const portCell = row[0] ? row[0].toString().trim() : '';
+    if (!portCell) return;
+    
+    const portMatch = portCell.match(/\d+/);
+    const portNo = portMatch ? parseInt(portMatch[0], 10) : null;
+    if (!portNo) return;
+    
+    const device = row[1] ? row[1].toString().trim() : '';
+    const ip = row[2] ? row[2].toString().trim() : '';
+    const mac = row[3] ? row[3].toString().trim() : '';
+    const connection = row[4] ? row[4].toString().trim() : '';
+    
+    // Tip çıkarımı (basit)
+    let type = 'DEVICE';
+    const deviceUpper = device.toUpperCase();
+    if (!device && !ip && !mac && !connection) type = 'BOŞ';
+    else if (deviceUpper.includes('AP')) type = 'AP';
+    else if (deviceUpper.includes('IPTV')) type = 'IPTV';
+    else if (deviceUpper.includes('FIBER')) type = 'FIBER';
+    else if (deviceUpper.includes('OTOMASYON')) type = 'OTOMASYON';
+    else if (deviceUpper.includes('SANTRAL')) type = 'SANTRAL';
+    else if (deviceUpper.includes('SERVER')) type = 'SERVER';
+    else if (deviceUpper.includes('HUB')) type = 'HUB';
+    
+    portsData.push({
+        port: portNo,
+        type: type,
+        device: device,
+        ip: ip,
+        mac: mac,
+        connection: connection
+    });
+});
+                            
+                            importData.push({
+                                name: switchName,
+                                brand: 'Cisco',
+                                model: 'Catalyst',
+                                ports: ports,
+                                ip: `172.18.50.${100 + index}`,
+                                ports_data: portsData
+                            });
+                        });
+                        
+                        console.log("Import verisi:", importData);
+                        resolve(importData);
+                        
+                    } catch (error) {
+                        reject(error);
+                    }
+                };
+                
+                reader.onerror = reject;
+                reader.readAsArrayBuffer(file);
+            });
+        }
+
+        function getPortCountFromSwitchName(switchName) {
+            const name = switchName.toUpperCase();
+            if (name.includes("SW2 -OTEL")) return 52;
+            if (name.includes("SW35 -BALO")) return 28;
+            if (name.includes("SW27 - BUYUK KABIN")) return 52;
+            return 48;
+        }
+
+        function getRackFromSwitchName(switchName) {
+            const name = switchName.toUpperCase();
+            if (name.includes("SW2 -OTEL") || name.includes("SW27 - BUYUK KABIN")) return "OTEL";
+            if (name.includes("SW19 -BALIK")) return "BALIK";
+            if (name.includes("SW25 -BALO") || name.includes("SW35 -BALO")) return "BALO";
+            if (name.includes("SW31 -RUBY") || name.includes("SW32 -RUBY")) return "RUBY";
+            if (name.includes("SW26 -VIP")) return "VIP";
+            if (name.includes("IT") || name.includes("BİL")) return "IT";
+            return "OTEL";
+        }
 
         function exportExcel() {
             const workbook = XLSX.utils.book_new();
