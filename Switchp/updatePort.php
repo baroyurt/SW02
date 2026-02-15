@@ -250,6 +250,9 @@ try {
     $portData = $checkResult->fetch_assoc();
     $checkStmt->close();
     
+    // Track old description for alarm detection
+    $oldDescription = $portData ? ($portData['connected_to'] ?? '') : '';
+    
     if ($checkResult->num_rows > 0) {
         // Eğer bu port daha önce hub'sa ve şimdi normal port yapılıyorsa
         if ($portData['is_hub'] == 1 && $isHub == 0) {
@@ -325,6 +328,42 @@ try {
         if ($updateStmt->execute()) {
             $affectedRows = $updateStmt->affected_rows;
             $updateStmt->close();
+            
+            // Check if description (connected_to) changed and create alarm
+            $newDescription = $ctp ?? '';
+            if ($oldDescription !== $newDescription && ($oldDescription !== '' || $newDescription !== '')) {
+                // Description changed - create alarm
+                try {
+                    $alarmData = [
+                        'action' => 'create_description_alarm',
+                        'switchId' => $switchId,
+                        'portNo' => $portNo,
+                        'oldDescription' => $oldDescription,
+                        'newDescription' => $newDescription
+                    ];
+                    
+                    // Call alarm API
+                    $ch = curl_init('http://localhost' . dirname($_SERVER['PHP_SELF']) . '/port_change_api.php');
+                    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                    curl_setopt($ch, CURLOPT_POST, true);
+                    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($alarmData));
+                    curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+                    curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+                    
+                    $alarmResponse = curl_exec($ch);
+                    $alarmResult = json_decode($alarmResponse, true);
+                    curl_close($ch);
+                    
+                    if ($alarmResult && isset($alarmResult['success']) && $alarmResult['success']) {
+                        error_log("Port description alarm created: Switch $switchId, Port $portNo");
+                    } else {
+                        error_log("Failed to create port description alarm: " . ($alarmResult['message'] ?? 'Unknown error'));
+                    }
+                } catch (Exception $e) {
+                    // Alarm creation failed, but port update succeeded - just log
+                    error_log("Error creating description change alarm: " . $e->getMessage());
+                }
+            }
             
             $panelInfo = '';
             if ($cpid) {
