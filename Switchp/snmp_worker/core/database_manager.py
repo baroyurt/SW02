@@ -313,14 +313,17 @@ class DatabaseManager:
             # Compare old_value and new_value to determine if this is a different change
             details_changed = False
             
-            if old_value is not None and new_value is not None:
+            # Check if both alarms have change details
+            if old_value is not None or new_value is not None or mac_address is not None:
                 # Check if the change details are different
-                if existing_alarm.old_value != old_value or existing_alarm.new_value != new_value:
+                if (old_value != existing_alarm.old_value or 
+                    new_value != existing_alarm.new_value or
+                    mac_address != existing_alarm.mac_address):
                     details_changed = True
                     self.logger.info(
                         f"Creating new alarm - details changed: "
-                        f"Old: ({existing_alarm.old_value} -> {existing_alarm.new_value}), "
-                        f"New: ({old_value} -> {new_value})"
+                        f"Old: ({existing_alarm.old_value} -> {existing_alarm.new_value}, MAC: {existing_alarm.mac_address}), "
+                        f"New: ({old_value} -> {new_value}, MAC: {mac_address})"
                     )
             
             if not details_changed:

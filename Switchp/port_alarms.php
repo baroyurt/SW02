@@ -610,16 +610,50 @@ $pageTitle = "Port Değişiklik Alarmları";
         </div>
     </div>
     
+    <!-- Alarm Details Modal -->
+    <div class="modal-overlay" id="details-modal">
+        <div class="modal" style="max-width: 700px;">
+            <div class="modal-header">
+                <h3 class="modal-title">
+                    <i class="fas fa-info-circle"></i> Alarm Detayları
+                </h3>
+                <button class="modal-close" onclick="closeDetailsModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="details-modal-body">
+                <div class="loading-state">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <p>Detaylar yükleniyor...</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeDetailsModal()">Kapat</button>
+            </div>
+        </div>
+    </div>
+    
     <script>
         let currentFilter = 'all';
         let allAlarms = [];
         let pendingAction = null;
+        let autoRefreshInterval = null;
         
         // Load alarms on page load
         document.addEventListener('DOMContentLoaded', function() {
             loadAlarms();
-            // Auto-refresh every 30 seconds
-            setInterval(loadAlarms, 30000);
+            
+            // Auto-refresh every 30 seconds, but only when page is visible
+            autoRefreshInterval = setInterval(() => {
+                if (!document.hidden) {
+                    loadAlarms();
+                }
+            }, 30000);
+            
+            // Refresh when page becomes visible again
+            document.addEventListener('visibilitychange', function() {
+                if (!document.hidden) {
+                    loadAlarms();
+                }
+            });
         });
         
         async function loadAlarms() {
@@ -847,9 +881,112 @@ $pageTitle = "Port Değişiklik Alarmları";
             pendingAction = null;
         }
         
+        function closeDetailsModal() {
+            document.getElementById('details-modal').classList.remove('active');
+        }
+        
         async function showAlarmDetails(alarmId) {
-            // TODO: Implement alarm details modal
-            showToast('Detaylar özelliği yakında eklenecek', 'info');
+            document.getElementById('details-modal').classList.add('active');
+            
+            const modalBody = document.getElementById('details-modal-body');
+            modalBody.innerHTML = `
+                <div class="loading-state">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <p>Detaylar yükleniyor...</p>
+                </div>
+            `;
+            
+            try {
+                const response = await fetch(`port_change_api.php?action=get_alarm_details&alarm_id=${alarmId}`);
+                const data = await response.json();
+                
+                if (!data.success || !data.alarm) {
+                    throw new Error(data.error || 'Alarm bulunamadı');
+                }
+                
+                const alarm = data.alarm;
+                const severityClass = alarm.severity.toLowerCase();
+                
+                modalBody.innerHTML = `
+                    <div style="margin-bottom: 20px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                            <h4 style="margin: 0; color: #333;">
+                                <i class="fas fa-network-wired"></i> ${escapeHtml(alarm.device_name)}
+                                ${alarm.port_number ? ' - Port ' + alarm.port_number : ''}
+                            </h4>
+                            <span class="alarm-severity ${severityClass}">${alarm.severity}</span>
+                        </div>
+                        
+                        <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                            <strong>Mesaj:</strong><br>
+                            ${escapeHtml(alarm.message)}
+                        </div>
+                        
+                        ${alarm.old_value && alarm.new_value ? `
+                            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                                <strong>Değişiklik:</strong><br>
+                                <div style="display: flex; align-items: center; gap: 10px; margin-top: 10px;">
+                                    <span class="change-value change-old">${escapeHtml(alarm.old_value)}</span>
+                                    <i class="fas fa-arrow-right"></i>
+                                    <span class="change-value change-new">${escapeHtml(alarm.new_value)}</span>
+                                </div>
+                            </div>
+                        ` : ''}
+                        
+                        ${alarm.mac_address ? `
+                            <div style="margin-bottom: 10px;">
+                                <strong>MAC Adresi:</strong> <code>${escapeHtml(alarm.mac_address)}</code>
+                            </div>
+                        ` : ''}
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px;">
+                            <div>
+                                <strong>İlk Gerçekleşme:</strong><br>
+                                ${formatDate(alarm.first_occurrence)}
+                            </div>
+                            <div>
+                                <strong>Son Gerçekleşme:</strong><br>
+                                ${formatDate(alarm.last_occurrence)}
+                            </div>
+                            <div>
+                                <strong>Tekrar Sayısı:</strong><br>
+                                ${alarm.occurrence_count} kez
+                            </div>
+                            <div>
+                                <strong>Durum:</strong><br>
+                                ${alarm.status === 'active' ? '<span style="color: #f59e0b;">Aktif</span>' : 
+                                  alarm.status === 'acknowledged' ? '<span style="color: #059669;">Bilgi Dahilinde</span>' : 
+                                  '<span style="color: #6b7280;">Çözüldü</span>'}
+                            </div>
+                        </div>
+                        
+                        ${alarm.acknowledged_at ? `
+                            <div style="background: rgba(5, 150, 105, 0.1); padding: 15px; border-radius: 8px; margin-top: 15px;">
+                                <strong>Onay Bilgisi:</strong><br>
+                                Onaylayan: ${escapeHtml(alarm.acknowledged_by || 'Bilinmiyor')}<br>
+                                Onay Zamanı: ${formatDate(alarm.acknowledged_at)}
+                                ${alarm.acknowledgment_type ? '<br>Tip: ' + escapeHtml(alarm.acknowledgment_type) : ''}
+                            </div>
+                        ` : ''}
+                        
+                        ${alarm.is_silenced == 1 && alarm.silence_until ? `
+                            <div style="background: rgba(245, 158, 11, 0.1); padding: 15px; border-radius: 8px; margin-top: 15px;">
+                                <strong><i class="fas fa-volume-mute"></i> Sesize Alındı</strong><br>
+                                ${formatDate(alarm.silence_until)} tarihine kadar
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            } catch (error) {
+                console.error('Error loading alarm details:', error);
+                modalBody.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-exclamation-circle" style="color: #ef4444;"></i>
+                        <h3>Hata</h3>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+            }
         }
         
         function navigateToPort(deviceId, portNumber, deviceName, deviceIp) {
