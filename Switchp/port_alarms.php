@@ -7,7 +7,62 @@ $auth = new Auth($conn);
 $auth->requireLogin();
 
 $currentUser = $auth->getUser();
+
+// Fetch alarm data server-side to avoid CORS issues in sandboxed iframe
+function getActiveAlarmsData($conn) {
+    $columns_to_select = "a.id, a.device_id, a.alarm_type, a.severity, a.status,
+                a.port_number, a.title, a.message, a.details,
+                a.occurrence_count, a.first_occurrence, a.last_occurrence,
+                a.acknowledged_at, a.acknowledged_by, a.acknowledgment_type,
+                a.silence_until, a.mac_address, a.old_value, a.new_value";
+    
+    // Try to check if columns exist
+    $result = $conn->query("SHOW COLUMNS FROM alarms LIKE 'from_port'");
+    if ($result && $result->num_rows > 0) {
+        $columns_to_select .= ", a.from_port, a.to_port";
+    } else {
+        $columns_to_select .= ", NULL as from_port, NULL as to_port";
+    }
+    
+    $sql = "SELECT 
+                $columns_to_select,
+                d.name as device_name, d.ip_address as device_ip,
+                CASE 
+                    WHEN a.silence_until > NOW() THEN 1
+                    ELSE 0
+                END as is_silenced,
+                CASE
+                    WHEN a.alarm_type IN ('mac_moved', 'mac_added', 'vlan_changed', 'description_changed') THEN 1
+                    ELSE 0
+                END as is_port_change
+            FROM alarms a
+            LEFT JOIN snmp_devices d ON a.device_id = d.id
+            WHERE a.status = 'ACTIVE'
+            ORDER BY 
+                CASE a.severity
+                    WHEN 'CRITICAL' THEN 1
+                    WHEN 'HIGH' THEN 2
+                    WHEN 'MEDIUM' THEN 3
+                    WHEN 'LOW' THEN 4
+                    WHEN 'INFO' THEN 5
+                END,
+                a.last_occurrence DESC";
+    
+    $result = $conn->query($sql);
+    $alarms = [];
+    
+    if ($result) {
+        while ($row = $result->fetch_assoc()) {
+            $alarms[] = $row;
+        }
+    }
+    
+    return $alarms;
+}
+
+$alarmsData = getActiveAlarmsData($conn);
 ?>
+<!DOCTYPE html>
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
@@ -15,6 +70,19 @@ $currentUser = $auth->getUser();
     <title>Port Change Alarms - Switch Management</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
+        :root {
+            --primary: #3b82f6;
+            --primary-dark: #2563eb;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --dark: #0f172a;
+            --dark-light: #1e293b;
+            --text: #e2e8f0;
+            --text-light: #94a3b8;
+            --border: #334155;
+        }
+        
         * {
             margin: 0;
             padding: 0;
@@ -23,7 +91,8 @@ $currentUser = $auth->getUser();
         
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: var(--dark);
+            color: var(--text);
             padding: 20px;
         }
         
@@ -33,17 +102,23 @@ $currentUser = $auth->getUser();
         }
         
         .header {
-            background: white;
+            background: var(--dark-light);
             padding: 25px;
             border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
             margin-bottom: 20px;
+            border: 1px solid var(--border);
         }
         
         .header h1 {
-            color: #667eea;
+            color: var(--primary);
             font-size: 28px;
             margin-bottom: 10px;
+        }
+        
+        .header p {
+            color: var(--text-light);
+            font-size: 14px;
         }
         
         .stats-bar {
@@ -54,11 +129,24 @@ $currentUser = $auth->getUser();
         }
         
         .stat-card {
-            background: white;
+            background: var(--dark-light);
             padding: 20px;
             border-radius: 10px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
             text-align: center;
+            border: 1px solid var(--border);
+            transition: all 0.3s;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+        }
+        
+        .stat-card .label {
+            color: var(--text-light);
+            font-size: 14px;
+            margin-bottom: 8px;
         }
         
         .stat-card .value {
@@ -67,134 +155,173 @@ $currentUser = $auth->getUser();
             margin: 10px 0;
         }
         
-        .stat-card.critical .value { color: #dc3545; }
-        .stat-card.high .value { color: #fd7e14; }
-        .stat-card.medium .value { color: #ffc107; }
-        .stat-card.info .value { color: #17a2b8; }
+        .stat-card.critical .value { color: var(--danger); }
+        .stat-card.high .value { color: var(--warning); }
+        .stat-card.medium .value { color: #fbbf24; }
+        .stat-card.info .value { color: var(--primary); }
+        
+        .toolbar {
+            background: var(--dark-light);
+            padding: 15px 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            border: 1px solid var(--border);
+        }
+        
+        .filter-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        
+        .filter-btn {
+            padding: 8px 16px;
+            border: 1px solid var(--border);
+            background: var(--dark);
+            color: var(--text);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+        
+        .filter-btn:hover {
+            background: var(--primary);
+            border-color: var(--primary);
+            color: white;
+        }
+        
+        .filter-btn.active {
+            background: var(--primary);
+            border-color: var(--primary);
+            color: white;
+        }
+        
+        .refresh-btn {
+            padding: 8px 16px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s;
+        }
+        
+        .refresh-btn:hover {
+            background: var(--primary-dark);
+        }
         
         .alarms-container {
-            background: white;
+            background: var(--dark-light);
             padding: 25px;
             border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            border: 1px solid var(--border);
         }
         
         .alarm-card {
-            border: 2px solid #e0e0e0;
+            border: 1px solid var(--border);
             border-radius: 10px;
             padding: 20px;
             margin-bottom: 15px;
             transition: all 0.3s;
             position: relative;
+            background: var(--dark);
         }
         
         .alarm-card:hover {
             transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
         }
         
         .alarm-card.critical {
-            border-left: 5px solid #dc3545;
-            background: #fff5f5;
+            border-left: 5px solid var(--danger);
+            background: rgba(239, 68, 68, 0.1);
         }
         
         .alarm-card.high {
-            border-left: 5px solid #fd7e14;
-            background: #fff9f0;
+            border-left: 5px solid var(--warning);
+            background: rgba(245, 158, 11, 0.1);
         }
         
         .alarm-card.medium {
-            border-left: 5px solid #ffc107;
-            background: #fffef0;
+            border-left: 5px solid #fbbf24;
+            background: rgba(251, 191, 36, 0.1);
         }
         
         .alarm-card.silenced {
             opacity: 0.6;
-            border-style: dashed;
+            border-left-color: var(--text-light);
         }
         
         .alarm-header {
             display: flex;
             justify-content: space-between;
-            align-items: center;
+            align-items: start;
             margin-bottom: 15px;
         }
         
         .alarm-title {
             font-size: 18px;
-            font-weight: bold;
-            color: #333;
-        }
-        
-        .alarm-severity {
-            padding: 5px 15px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: bold;
-            color: white;
-        }
-        
-        .severity-CRITICAL { background: #dc3545; }
-        .severity-HIGH { background: #fd7e14; }
-        .severity-MEDIUM { background: #ffc107; color: #333; }
-        .severity-LOW { background: #28a745; }
-        .severity-INFO { background: #17a2b8; }
-        
-        .alarm-details {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin-bottom: 15px;
-        }
-        
-        .detail-item {
-            padding: 10px;
-            background: #f8f9fa;
-            border-radius: 5px;
-        }
-        
-        .detail-label {
-            font-size: 12px;
-            color: #666;
+            font-weight: 600;
+            color: var(--text);
             margin-bottom: 5px;
         }
         
-        .detail-value {
+        .alarm-severity {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .alarm-severity.critical { background: var(--danger); color: white; }
+        .alarm-severity.high { background: var(--warning); color: white; }
+        .alarm-severity.medium { background: #fbbf24; color: #1e293b; }
+        
+        .alarm-info {
+            color: var(--text-light);
             font-size: 14px;
-            font-weight: bold;
-            color: #333;
+            margin-bottom: 12px;
         }
         
-        .mac-highlight {
-            background: #fff3cd;
-            padding: 2px 6px;
-            border-radius: 3px;
-            font-family: 'Courier New', monospace;
+        .alarm-message {
+            color: var(--text);
+            margin-bottom: 15px;
+            line-height: 1.5;
         }
         
-        .change-indicator {
+        .alarm-details {
+            background: rgba(255,255,255,0.05);
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            font-size: 13px;
+            color: var(--text-light);
+        }
+        
+        .alarm-meta {
+            display: flex;
+            gap: 20px;
+            font-size: 12px;
+            color: var(--text-light);
+            flex-wrap: wrap;
+        }
+        
+        .alarm-meta span {
             display: flex;
             align-items: center;
-            gap: 10px;
-            margin: 10px 0;
-            padding: 10px;
-            background: #e3f2fd;
-            border-radius: 5px;
-        }
-        
-        .change-indicator .old-value {
-            text-decoration: line-through;
-            color: #999;
-        }
-        
-        .change-indicator .arrow {
-            font-size: 20px;
-            color: #667eea;
-        }
-        
-        .change-indicator .new-value {
-            color: #28a745;
-            font-weight: bold;
+            gap: 5px;
         }
         
         .alarm-actions {
@@ -204,150 +331,104 @@ $currentUser = $auth->getUser();
         }
         
         .btn {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-weight: bold;
-            transition: all 0.3s;
-        }
-        
-        .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 3px 10px rgba(0,0,0,0.2);
-        }
-        
-        .btn-acknowledge {
-            background: #28a745;
-            color: white;
-        }
-        
-        .btn-acknowledge:hover {
-            background: #218838;
-        }
-        
-        .btn-silence {
-            background: #ffc107;
-            color: #333;
-        }
-        
-        .btn-silence:hover {
-            background: #e0a800;
-        }
-        
-        .btn-details {
-            background: #17a2b8;
-            color: white;
-        }
-        
-        .btn-details:hover {
-            background: #138496;
-        }
-        
-        .filter-bar {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-            flex-wrap: wrap;
-        }
-        
-        .filter-btn {
             padding: 8px 16px;
-            border: 2px solid #667eea;
-            background: white;
-            color: #667eea;
-            border-radius: 20px;
+            border: none;
+            border-radius: 6px;
             cursor: pointer;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
             transition: all 0.3s;
         }
         
-        .filter-btn:hover,
-        .filter-btn.active {
-            background: #667eea;
+        .btn-primary {
+            background: var(--primary);
             color: white;
         }
         
-        .timestamp {
-            font-size: 12px;
-            color: #999;
-            font-style: italic;
+        .btn-primary:hover {
+            background: var(--primary-dark);
         }
         
-        .loading {
-            text-align: center;
-            padding: 40px;
+        .btn-danger {
+            background: var(--danger);
+            color: white;
         }
         
-        .spinner {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #667eea;
-            border-radius: 50%;
-            width: 50px;
-            height: 50px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 20px;
+        .btn-danger:hover {
+            background: #dc2626;
         }
         
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+        .btn-secondary {
+            background: var(--dark);
+            color: var(--text);
+            border: 1px solid var(--border);
         }
         
-        .no-alarms {
+        .btn-secondary:hover {
+            background: var(--border);
+        }
+        
+        .empty-state {
             text-align: center;
             padding: 60px 20px;
-            color: #999;
+            color: var(--text-light);
         }
         
-        .no-alarms i {
+        .empty-state i {
             font-size: 64px;
             margin-bottom: 20px;
-            opacity: 0.3;
+            color: var(--success);
+        }
+        
+        .empty-state h3 {
+            color: var(--text);
+            margin-bottom: 10px;
+        }
+        
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            z-index: 9999;
+            backdrop-filter: blur(5px);
+        }
+        
+        .modal-overlay.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
         
         .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.5);
-        }
-        
-        .modal-content {
-            background: white;
-            margin: min(100px, 10vh) auto;
-            padding: 30px;
+            background: var(--dark-light);
             border-radius: 15px;
+            padding: 30px;
+            max-width: 500px;
             width: 90%;
-            max-width: 600px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-            max-height: calc(100vh - 200px);
-            overflow-y: auto;
+            border: 1px solid var(--border);
         }
         
         .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
             margin-bottom: 20px;
         }
         
-        .modal-header h2 {
-            color: #667eea;
+        .modal-title {
+            color: var(--primary);
+            font-size: 20px;
+            margin-bottom: 10px;
         }
         
-        .close {
-            font-size: 28px;
-            font-weight: bold;
-            cursor: pointer;
-            color: #999;
-        }
-        
-        .close:hover {
-            color: #333;
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 20px;
         }
         
         .form-group {
@@ -357,182 +438,207 @@ $currentUser = $auth->getUser();
         .form-group label {
             display: block;
             margin-bottom: 5px;
-            font-weight: bold;
-            color: #333;
+            color: var(--text);
+            font-weight: 600;
         }
         
-        .form-group textarea {
+        .form-group input, .form-group textarea, .form-group select {
             width: 100%;
             padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            font-family: inherit;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--dark);
+            color: var(--text);
+            font-size: 14px;
         }
         
-        .auto-refresh {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 10px;
-            background: white;
-            border-radius: 10px;
-        }
-        
-        .auto-refresh input[type="checkbox"] {
-            width: 20px;
-            height: 20px;
+        .form-group input:focus, .form-group textarea:focus, .form-group select:focus {
+            outline: none;
+            border-color: var(--primary);
         }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1><i class="fas fa-bell"></i> Port Change Alarms</h1>
-            <p>Real-time monitoring of MAC movements, VLAN changes, and port configuration updates</p>
-            <div class="auto-refresh">
-                <input type="checkbox" id="autoRefresh" checked>
-                <label for="autoRefresh">Auto-refresh every 30 seconds</label>
-            </div>
+            <h1><i class="fas fa-exclamation-triangle"></i> Port Değişiklik Alarmları</h1>
+            <p>Port durumu değişiklikleri ve MAC adres hareketlerini izleyin</p>
         </div>
         
-        <div class="stats-bar" id="statsBar">
+        <div class="stats-bar">
             <div class="stat-card critical">
-                <div><i class="fas fa-exclamation-circle"></i> Critical</div>
+                <div class="label">Critical</div>
                 <div class="value" id="criticalCount">0</div>
             </div>
             <div class="stat-card high">
-                <div><i class="fas fa-exclamation-triangle"></i> High</div>
+                <div class="label">High</div>
                 <div class="value" id="highCount">0</div>
             </div>
             <div class="stat-card medium">
-                <div><i class="fas fa-info-circle"></i> Medium</div>
+                <div class="label">Medium</div>
                 <div class="value" id="mediumCount">0</div>
             </div>
             <div class="stat-card info">
-                <div><i class="fas fa-check-circle"></i> Total Active</div>
+                <div class="label">Total Active</div>
                 <div class="value" id="totalCount">0</div>
             </div>
         </div>
         
+        <div class="toolbar">
+            <div class="filter-group">
+                <span style="color: var(--text-light); font-size: 14px;">Filter:</span>
+                <button class="filter-btn active" onclick="filterAlarms('all')">All</button>
+                <button class="filter-btn" onclick="filterAlarms('critical')">Critical</button>
+                <button class="filter-btn" onclick="filterAlarms('high')">High</button>
+                <button class="filter-btn" onclick="filterAlarms('medium')">Medium</button>
+            </div>
+            <button class="refresh-btn" onclick="refreshPage()">
+                <i class="fas fa-sync-alt"></i> Refresh
+            </button>
+        </div>
+        
         <div class="alarms-container">
-            <h2 style="margin-bottom: 15px;"><i class="fas fa-list"></i> Active Alarms</h2>
-            
-            <div class="filter-bar">
-                <button class="filter-btn active" data-filter="all">All</button>
-                <button class="filter-btn" data-filter="mac_moved">MAC Moved</button>
-                <button class="filter-btn" data-filter="vlan_changed">VLAN Changed</button>
-                <button class="filter-btn" data-filter="description_changed">Description Changed</button>
-                <button class="filter-btn" data-filter="silenced" style="border-color: #999; color: #999;">Silenced</button>
-            </div>
-            
-            <div id="alarmsContainer">
-                <div class="loading">
-                    <div class="spinner"></div>
-                    <p>Loading alarms...</p>
-                </div>
-            </div>
+            <div id="alarms-list"></div>
         </div>
     </div>
     
     <!-- Acknowledge Modal -->
-    <div id="acknowledgeModal" class="modal">
-        <div class="modal-content">
+    <div class="modal-overlay" id="ackModal">
+        <div class="modal">
             <div class="modal-header">
-                <h2>Acknowledge Alarm</h2>
-                <span class="close" onclick="closeModal('acknowledgeModal')">&times;</span>
+                <h3 class="modal-title">Acknowledge Alarm</h3>
             </div>
             <div class="form-group">
-                <label>Note (Optional):</label>
-                <textarea id="ackNote" rows="3" placeholder="Add a note about this change..."></textarea>
+                <label>Acknowledgment Type:</label>
+                <select id="ackType">
+                    <option value="acknowledged">Acknowledged</option>
+                    <option value="resolved">Resolved</option>
+                    <option value="false_positive">False Positive</option>
+                </select>
             </div>
-            <div class="alarm-actions">
-                <button class="btn btn-acknowledge" onclick="confirmAcknowledge()">
-                    <i class="fas fa-check"></i> Acknowledge as Known Change
-                </button>
+            <div class="form-group">
+                <label>Notes (Optional):</label>
+                <textarea id="ackNotes" rows="3" placeholder="Add any notes..."></textarea>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="closeAckModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="submitAcknowledge()">Submit</button>
             </div>
         </div>
     </div>
     
     <!-- Silence Modal -->
-    <div id="silenceModal" class="modal">
-        <div class="modal-content">
+    <div class="modal-overlay" id="silenceModal">
+        <div class="modal">
             <div class="modal-header">
-                <h2>Silence Alarm</h2>
-                <span class="close" onclick="closeModal('silenceModal')">&times;</span>
+                <h3 class="modal-title">Silence Alarm</h3>
             </div>
             <div class="form-group">
                 <label>Silence Duration:</label>
-                <select id="silenceDuration" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
-                    <option value="1">1 Hour</option>
-                    <option value="4">4 Hours</option>
-                    <option value="24" selected>24 Hours</option>
-                    <option value="168">7 Days</option>
+                <select id="silenceDuration">
+                    <option value="30">30 minutes</option>
+                    <option value="60">1 hour</option>
+                    <option value="180">3 hours</option>
+                    <option value="360">6 hours</option>
+                    <option value="1440">24 hours</option>
                 </select>
             </div>
-            <div class="alarm-actions">
-                <button class="btn btn-silence" onclick="confirmSilence()">
-                    <i class="fas fa-volume-mute"></i> Silence Alarm
-                </button>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="closeSilenceModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="submitSilence()">Silence</button>
             </div>
         </div>
     </div>
     
     <script>
-        let currentAlarmId = null;
+        // Embed alarm data from server-side (avoids CORS issues)
+        const alarmsData = <?php echo json_encode($alarmsData); ?>;
         let currentFilter = 'all';
-        let refreshInterval = null;
+        let selectedAlarmId = null;
         
-        // Load alarms on page load
+        // Initialize on page load
         document.addEventListener('DOMContentLoaded', function() {
-            loadAlarms();
-            
-            // Setup filter buttons
-            document.querySelectorAll('.filter-btn').forEach(btn => {
-                btn.addEventListener('click', function() {
-                    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-                    this.classList.add('active');
-                    currentFilter = this.dataset.filter;
-                    filterAlarms();
-                });
-            });
-            
-            // Setup auto-refresh
-            document.getElementById('autoRefresh').addEventListener('change', function() {
-                if (this.checked) {
-                    startAutoRefresh();
-                } else {
-                    stopAutoRefresh();
-                }
-            });
-            
-            startAutoRefresh();
+            displayAlarms(alarmsData);
+            updateStats(alarmsData);
         });
         
-        function startAutoRefresh() {
-            refreshInterval = setInterval(loadAlarms, 30000); // 30 seconds
-        }
-        
-        function stopAutoRefresh() {
-            if (refreshInterval) {
-                clearInterval(refreshInterval);
-                refreshInterval = null;
+        function displayAlarms(alarms) {
+            const container = document.getElementById('alarms-list');
+            
+            // Filter alarms based on current filter
+            let filtered = alarms;
+            if (currentFilter === 'critical') {
+                filtered = alarms.filter(a => a.severity === 'CRITICAL' && !a.is_silenced);
+            } else if (currentFilter === 'high') {
+                filtered = alarms.filter(a => a.severity === 'HIGH' && !a.is_silenced);
+            } else if (currentFilter === 'medium') {
+                filtered = alarms.filter(a => a.severity === 'MEDIUM' && !a.is_silenced);
+            } else if (currentFilter === 'all') {
+                filtered = alarms;
             }
-        }
-        
-        async function loadAlarms() {
-            try {
-                const response = await fetch('port_change_api.php?action=get_active_alarms');
-                const data = await response.json();
+            
+            if (filtered.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-check-circle"></i>
+                        <h3>No Active Alarms</h3>
+                        <p>All systems are running normally</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            let html = '';
+            filtered.forEach(alarm => {
+                const severityClass = alarm.severity.toLowerCase();
+                const silencedClass = alarm.is_silenced ? 'silenced' : '';
+                const silencedBadge = alarm.is_silenced ? '<span style="background: var(--text-light); color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px; margin-left: 10px;">SILENCED</span>' : '';
                 
-                if (data.success) {
-                    displayAlarms(data.alarms);
-                    updateStats(data.alarms);
-                } else {
-                    showError('Failed to load alarms: ' + (data.error || 'Unknown error'));
-                }
-            } catch (error) {
-                showError('Error loading alarms: ' + error.message);
-            }
+                html += `
+                    <div class="alarm-card ${severityClass} ${silencedClass}">
+                        <div class="alarm-header">
+                            <div>
+                                <div class="alarm-title">${escapeHtml(alarm.title)}</div>
+                                <div class="alarm-info">
+                                    <i class="fas fa-network-wired"></i> ${escapeHtml(alarm.device_name || 'Unknown Device')}
+                                    ${alarm.port_number ? ` - Port ${alarm.port_number}` : ''}
+                                    ${alarm.device_ip ? ` (${alarm.device_ip})` : ''}
+                                </div>
+                            </div>
+                            <span class="alarm-severity ${severityClass}">${alarm.severity}${silencedBadge}</span>
+                        </div>
+                        
+                        <div class="alarm-message">${escapeHtml(alarm.message)}</div>
+                        
+                        ${alarm.details ? `<div class="alarm-details">${escapeHtml(alarm.details)}</div>` : ''}
+                        
+                        <div class="alarm-meta">
+                            <span><i class="fas fa-clock"></i> First: ${formatDate(alarm.first_occurrence)}</span>
+                            <span><i class="fas fa-redo"></i> Last: ${formatDate(alarm.last_occurrence)}</span>
+                            ${alarm.occurrence_count > 1 ? `<span><i class="fas fa-repeat"></i> Count: ${alarm.occurrence_count}</span>` : ''}
+                            ${alarm.mac_address ? `<span><i class="fas fa-ethernet"></i> MAC: ${alarm.mac_address}</span>` : ''}
+                        </div>
+                        
+                        <div class="alarm-actions">
+                            <button class="btn btn-primary" onclick="openAckModal(${alarm.id})">
+                                <i class="fas fa-check"></i> Acknowledge
+                            </button>
+                            ${!alarm.is_silenced ? `
+                                <button class="btn btn-secondary" onclick="openSilenceModal(${alarm.id})">
+                                    <i class="fas fa-bell-slash"></i> Silence
+                                </button>
+                            ` : ''}
+                            ${alarm.port_number ? `
+                                <button class="btn btn-secondary" onclick="viewPort('${alarm.device_name}', ${alarm.port_number})">
+                                    <i class="fas fa-eye"></i> View Port
+                                </button>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
         }
         
         function updateStats(alarms) {
@@ -549,163 +655,52 @@ $currentUser = $auth->getUser();
             document.getElementById('totalCount').textContent = activeAlarms.length;
         }
         
-        function displayAlarms(alarms) {
-            const container = document.getElementById('alarmsContainer');
+        function filterAlarms(filter) {
+            currentFilter = filter;
             
-            if (alarms.length === 0) {
-                container.innerHTML = `
-                    <div class="no-alarms">
-                        <i class="fas fa-check-circle"></i>
-                        <h3>No Active Alarms</h3>
-                        <p>All systems are operating normally</p>
-                    </div>
-                `;
-                return;
-            }
-            
-            let html = '';
-            
-            alarms.forEach(alarm => {
-                const isSilenced = alarm.is_silenced == 1;
-                const severityClass = alarm.severity.toLowerCase();
-                
-                html += `
-                    <div class="alarm-card ${severityClass} ${isSilenced ? 'silenced' : ''}" data-alarm-type="${alarm.alarm_type}" data-alarm-id="${alarm.id}">
-                        <div class="alarm-header">
-                            <div class="alarm-title">
-                                <i class="fas fa-network-wired"></i> ${alarm.device_name} - Port ${alarm.port_number || 'N/A'}
-                            </div>
-                            <span class="alarm-severity severity-${alarm.severity}">${alarm.severity}</span>
-                        </div>
-                        
-                        <div class="alarm-details">
-                            <div class="detail-item">
-                                <div class="detail-label">Alarm Type</div>
-                                <div class="detail-value">${formatAlarmType(alarm.alarm_type)}</div>
-                            </div>
-                            <div class="detail-item">
-                                <div class="detail-label">Switch IP</div>
-                                <div class="detail-value">${alarm.device_ip}</div>
-                            </div>
-                            <div class="detail-item">
-                                <div class="detail-label">First Occurrence</div>
-                                <div class="detail-value">${formatDateTime(alarm.first_occurrence)}</div>
-                            </div>
-                            <div class="detail-item">
-                                <div class="detail-label">Last Occurrence</div>
-                                <div class="detail-value">${formatDateTime(alarm.last_occurrence)}</div>
-                            </div>
-                        </div>
-                        
-                        <div style="margin: 15px 0;">
-                            <strong>${alarm.title}</strong>
-                            <p style="margin: 10px 0; color: #666;">${alarm.message}</p>
-                        </div>
-                        
-                        ${alarm.mac_address ? `
-                            <div style="margin: 10px 0;">
-                                <strong>MAC Address:</strong> <span class="mac-highlight">${alarm.mac_address}</span>
-                            </div>
-                        ` : ''}
-                        
-                        ${alarm.old_value && alarm.new_value ? `
-                            <div class="change-indicator">
-                                <span class="old-value">${alarm.old_value}</span>
-                                <span class="arrow"><i class="fas fa-arrow-right"></i></span>
-                                <span class="new-value">${alarm.new_value}</span>
-                            </div>
-                        ` : ''}
-                        
-                        ${isSilenced ? `
-                            <div style="padding: 10px; background: #fff3cd; border-radius: 5px; margin: 10px 0;">
-                                <i class="fas fa-volume-mute"></i> <strong>Silenced until:</strong> ${formatDateTime(alarm.silence_until)}
-                            </div>
-                        ` : ''}
-                        
-                        ${alarm.acknowledged_at ? `
-                            <div style="padding: 10px; background: #d4edda; border-radius: 5px; margin: 10px 0;">
-                                <i class="fas fa-check"></i> <strong>Acknowledged by:</strong> ${alarm.acknowledged_by} on ${formatDateTime(alarm.acknowledged_at)}
-                            </div>
-                        ` : ''}
-                        
-                        <div class="alarm-actions">
-                            ${!alarm.acknowledged_at ? `
-                                <button class="btn btn-acknowledge" onclick="showAcknowledgeModal(${alarm.id})">
-                                    <i class="fas fa-check"></i> Bilgi Dahilinde Kapat
-                                </button>
-                            ` : ''}
-                            ${!isSilenced ? `
-                                <button class="btn btn-silence" onclick="showSilenceModal(${alarm.id})">
-                                    <i class="fas fa-volume-mute"></i> Alarmı Sesize Al
-                                </button>
-                            ` : ''}
-                            <button class="btn btn-details" onclick="showAlarmDetails(${alarm.id}, ${alarm.device_id}, ${alarm.port_number})">
-                                <i class="fas fa-eye"></i> View Port
-                            </button>
-                        </div>
-                    </div>
-                `;
+            // Update active button
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.remove('active');
             });
+            event.target.classList.add('active');
             
-            container.innerHTML = html;
-            filterAlarms();
+            displayAlarms(alarmsData);
         }
         
-        function filterAlarms() {
-            const cards = document.querySelectorAll('.alarm-card');
-            
-            cards.forEach(card => {
-                if (currentFilter === 'all') {
-                    card.style.display = 'block';
-                } else if (currentFilter === 'silenced') {
-                    card.style.display = card.classList.contains('silenced') ? 'block' : 'none';
-                } else {
-                    card.style.display = card.dataset.alarmType === currentFilter ? 'block' : 'none';
-                }
-            });
+        function refreshPage() {
+            location.reload();
         }
         
-        function formatAlarmType(type) {
-            const types = {
-                'mac_moved': 'MAC Moved',
-                'mac_added': 'MAC Added',
-                'vlan_changed': 'VLAN Changed',
-                'description_changed': 'Description Changed',
-                'port_down': 'Port Down',
-                'device_unreachable': 'Device Unreachable'
-            };
-            return types[type] || type;
+        function openAckModal(alarmId) {
+            selectedAlarmId = alarmId;
+            document.getElementById('ackModal').classList.add('active');
         }
         
-        function formatDateTime(dateStr) {
-            if (!dateStr) return 'N/A';
-            const date = new Date(dateStr);
-            return date.toLocaleString('tr-TR');
+        function closeAckModal() {
+            document.getElementById('ackModal').classList.remove('active');
+            selectedAlarmId = null;
         }
         
-        function showAcknowledgeModal(alarmId) {
-            currentAlarmId = alarmId;
-            document.getElementById('acknowledgeModal').style.display = 'block';
+        function openSilenceModal(alarmId) {
+            selectedAlarmId = alarmId;
+            document.getElementById('silenceModal').classList.add('active');
         }
         
-        function showSilenceModal(alarmId) {
-            currentAlarmId = alarmId;
-            document.getElementById('silenceModal').style.display = 'block';
+        function closeSilenceModal() {
+            document.getElementById('silenceModal').classList.remove('active');
+            selectedAlarmId = null;
         }
         
-        function closeModal(modalId) {
-            document.getElementById(modalId).style.display = 'none';
-        }
-        
-        async function confirmAcknowledge() {
-            const note = document.getElementById('ackNote').value;
+        async function submitAcknowledge() {
+            const ackType = document.getElementById('ackType').value;
+            const notes = document.getElementById('ackNotes').value;
             
             try {
                 const formData = new FormData();
                 formData.append('action', 'acknowledge_alarm');
-                formData.append('alarm_id', currentAlarmId);
-                formData.append('ack_type', 'known_change');
-                formData.append('note', note);
+                formData.append('alarm_id', selectedAlarmId);
+                formData.append('acknowledgment_type', ackType);
+                if (notes) formData.append('notes', notes);
                 
                 const response = await fetch('port_change_api.php', {
                     method: 'POST',
@@ -715,25 +710,26 @@ $currentUser = $auth->getUser();
                 const data = await response.json();
                 
                 if (data.success) {
-                    closeModal('acknowledgeModal');
-                    document.getElementById('ackNote').value = '';
-                    loadAlarms();
+                    alert('Alarm acknowledged successfully');
+                    location.reload();
                 } else {
-                    alert('Error: ' + (data.error || 'Failed to acknowledge alarm'));
+                    alert('Error: ' + (data.error || 'Unknown error'));
                 }
             } catch (error) {
                 alert('Error: ' + error.message);
             }
+            
+            closeAckModal();
         }
         
-        async function confirmSilence() {
+        async function submitSilence() {
             const duration = document.getElementById('silenceDuration').value;
             
             try {
                 const formData = new FormData();
                 formData.append('action', 'silence_alarm');
-                formData.append('alarm_id', currentAlarmId);
-                formData.append('duration_hours', duration);
+                formData.append('alarm_id', selectedAlarmId);
+                formData.append('duration', duration);
                 
                 const response = await fetch('port_change_api.php', {
                     method: 'POST',
@@ -743,40 +739,51 @@ $currentUser = $auth->getUser();
                 const data = await response.json();
                 
                 if (data.success) {
-                    closeModal('silenceModal');
-                    loadAlarms();
+                    alert('Alarm silenced successfully');
+                    location.reload();
                 } else {
-                    alert('Error: ' + (data.error || 'Failed to silence alarm'));
+                    alert('Error: ' + (data.error || 'Unknown error'));
                 }
             } catch (error) {
                 alert('Error: ' + error.message);
             }
+            
+            closeSilenceModal();
         }
         
-        function showAlarmDetails(alarmId, deviceId, portNumber) {
-            // Open a new window or modal with detailed history
-            window.open(`port_history.php?device_id=${deviceId}&port_number=${portNumber}`, '_blank');
+        function viewPort(deviceName, portNumber) {
+            alert('View Port feature - Device: ' + deviceName + ', Port: ' + portNumber);
+            // This would typically open a detailed port view
         }
         
-        function showError(message) {
-            document.getElementById('alarmsContainer').innerHTML = `
-                <div style="text-align: center; padding: 40px; color: #dc3545;">
-                    <i class="fas fa-exclamation-triangle" style="font-size: 48px; margin-bottom: 20px;"></i>
-                    <h3>Error</h3>
-                    <p>${message}</p>
-                    <button class="btn btn-details" onclick="loadAlarms()" style="margin-top: 20px;">
-                        <i class="fas fa-redo"></i> Retry
-                    </button>
-                </div>
-            `;
+        function formatDate(dateString) {
+            if (!dateString) return 'N/A';
+            const date = new Date(dateString);
+            return date.toLocaleString('tr-TR', { 
+                year: 'numeric', 
+                month: '2-digit', 
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
         }
         
-        // Close modal when clicking outside
-        window.onclick = function(event) {
-            if (event.target.classList.contains('modal')) {
-                event.target.style.display = 'none';
-            }
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
         }
+        
+        // Close modals when clicking outside
+        document.querySelectorAll('.modal-overlay').forEach(overlay => {
+            overlay.addEventListener('click', function(e) {
+                if (e.target === this) {
+                    this.classList.remove('active');
+                    selectedAlarmId = null;
+                }
+            });
+        });
     </script>
 </body>
 </html>
