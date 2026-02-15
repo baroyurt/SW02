@@ -153,7 +153,7 @@ function getActiveAlarms($conn) {
                 d.name as device_name, d.ip_address as device_ip
             FROM alarms a
             LEFT JOIN snmp_devices d ON a.device_id = d.id
-            WHERE a.status = 'active'
+            WHERE a.status = 'ACTIVE'
             ORDER BY a.severity DESC, a.last_occurrence DESC";
     
     $result = $conn->query($sql);
