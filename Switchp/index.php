@@ -4343,18 +4343,14 @@ function confirmDeleteRack(rackId) {
                     const ipFilled = autoFillField(ipInput, device.ip_address);
                     const infoFilled = autoFillField(connectionInfoInput, device.device_name);
                     
-                    // Kullanıcıya bilgi ver
-                    if (ipFilled || infoFilled) {
+                    // Auto-save if we're in edit mode (has port-id) and fields were filled
+                    const isEditMode = document.getElementById('port-id').value !== '';
+                    if (isEditMode && (ipFilled || infoFilled)) {
+                        // Immediately save to database
+                        await autoSavePortConnection();
+                    } else if (ipFilled || infoFilled) {
+                        // Only show toast if not auto-saving (new connection)
                         showToast('Device Import kaydı bulundu ve bilgiler dolduruldu', 'success', 3000);
-                        
-                        // Auto-save if we're in edit mode (has port-id) and fields were filled
-                        const isEditMode = document.getElementById('port-id').value !== '';
-                        if (isEditMode && (ipFilled || infoFilled)) {
-                            // Small delay to let user see the auto-fill
-                            setTimeout(() => {
-                                autoSavePortConnection();
-                            }, 1000);
-                        }
                     }
                 } else {
                     // Kayıt bulunamadı - sessizce devam et, hata gösterme

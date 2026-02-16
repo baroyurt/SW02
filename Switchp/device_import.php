@@ -434,9 +434,42 @@ $currentUser = $auth->getUser();
         
         <!-- Device List -->
         <div class="card">
-            <h2><i class="fas fa-list"></i> Recent Devices</h2>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 15px;">
+                <h2 style="margin: 0;"><i class="fas fa-list"></i> Registered Devices</h2>
+                
+                <!-- Search Box -->
+                <div style="position: relative; flex: 1; min-width: 300px; max-width: 500px;">
+                    <input type="text" id="device-search" placeholder="🔍 Search by MAC, IP, or Hostname..." 
+                           style="width: 100%; padding: 10px 40px 10px 15px; border-radius: 8px; border: 1px solid var(--border); background: var(--dark); color: var(--text); font-size: 14px;">
+                    <button id="clear-search" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text-light); cursor: pointer; display: none; font-size: 16px;">
+                        <i class="fas fa-times-circle"></i>
+                    </button>
+                </div>
+            </div>
+            
             <div id="device-list">
                 <p style="text-align: center; color: var(--text-light);">Loading devices...</p>
+            </div>
+            
+            <!-- Pagination Controls -->
+            <div id="pagination-controls" style="margin-top: 20px; display: none;">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+                    <!-- Page Info and Size Selector -->
+                    <div style="display: flex; align-items: center; gap: 15px; color: var(--text-light);">
+                        <span id="pagination-info">Showing 1 to 10 of 100 devices</span>
+                        <select id="page-size" style="padding: 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--dark); color: var(--text);">
+                            <option value="10">10</option>
+                            <option value="25">25</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Page Navigation -->
+                    <div id="page-buttons" style="display: flex; gap: 5px; flex-wrap: wrap;">
+                        <!-- Buttons will be generated here -->
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -668,51 +701,181 @@ $currentUser = $auth->getUser();
             }
         });
         
+        // Pagination and search state
+        let currentPage = 1;
+        let currentLimit = 10;
+        let currentSearch = '';
+        let searchTimeout = null;
+        
+        // Search functionality
+        document.getElementById('device-search').addEventListener('input', (e) => {
+            clearTimeout(searchTimeout);
+            currentSearch = e.target.value.trim();
+            
+            const clearBtn = document.getElementById('clear-search');
+            clearBtn.style.display = currentSearch ? 'block' : 'none';
+            
+            // Debounce search - wait 300ms after user stops typing
+            searchTimeout = setTimeout(() => {
+                currentPage = 1; // Reset to first page on new search
+                loadDevices();
+            }, 300);
+        });
+        
+        document.getElementById('clear-search').addEventListener('click', () => {
+            document.getElementById('device-search').value = '';
+            document.getElementById('clear-search').style.display = 'none';
+            currentSearch = '';
+            currentPage = 1;
+            loadDevices();
+        });
+        
+        // Page size change
+        document.getElementById('page-size').addEventListener('change', (e) => {
+            currentLimit = parseInt(e.target.value);
+            currentPage = 1; // Reset to first page
+            loadDevices();
+        });
+        
         function loadDevices() {
-            fetch('device_import_api.php?action=list&per_page=10')
+            const params = new URLSearchParams({
+                action: 'list',
+                page: currentPage,
+                limit: currentLimit
+            });
+            
+            if (currentSearch) {
+                params.append('search', currentSearch);
+            }
+            
+            fetch('device_import_api.php?' + params.toString())
                 .then(res => res.json())
                 .then(data => {
                     if (data.success && data.devices) {
-                        let html = `<table>
-                            <tr>
-                                <th>MAC Address</th>
-                                <th>IP Address</th>
-                                <th>Hostname</th>
-                                <th>Source</th>
-                                <th>Updated</th>
-                                <th style="text-align: center;">Actions</th>
-                            </tr>`;
-                        
-                        data.devices.forEach(device => {
-                            html += `<tr>
-                                <td><code>${device.mac_address}</code></td>
-                                <td>${device.ip_address || '-'}</td>
-                                <td><strong>${device.device_name}</strong></td>
-                                <td><span style="color: var(--${device.source === 'manual' ? 'success' : 'primary'});">${device.source}</span></td>
-                                <td style="color: var(--text-light);">${new Date(device.updated_at).toLocaleString()}</td>
-                                <td style="text-align: center;">
-                                    <button onclick='openEditModal(${JSON.stringify(device)})' class="btn btn-sm" style="padding: 5px 10px; background: var(--primary);">
-                                        <i class="fas fa-edit"></i> Düzenle
-                                    </button>
-                                </td>
-                            </tr>`;
-                        });
-                        
-                        html += '</table>';
-                        
-                        if (data.total > 10) {
-                            html += `<p style="text-align: center; margin-top: 20px; color: var(--text-light);">
-                                Showing 10 of ${data.total} devices
-                            </p>`;
-                        }
-                        
-                        document.getElementById('device-list').innerHTML = html;
+                        renderDeviceTable(data.devices);
+                        renderPagination(data);
                     }
                 })
                 .catch(error => {
                     document.getElementById('device-list').innerHTML = 
                         '<p style="color: var(--danger);">Error loading devices</p>';
                 });
+        }
+        
+        function renderDeviceTable(devices) {
+            if (devices.length === 0) {
+                document.getElementById('device-list').innerHTML = 
+                    '<p style="text-align: center; color: var(--text-light); padding: 40px;">No devices found</p>';
+                return;
+            }
+            
+            let html = `<table>
+                <tr>
+                    <th>MAC Address</th>
+                    <th>IP Address</th>
+                    <th>Hostname</th>
+                    <th>Source</th>
+                    <th>Updated</th>
+                    <th style="text-align: center;">Actions</th>
+                </tr>`;
+            
+            devices.forEach(device => {
+                html += `<tr>
+                    <td><code>${device.mac_address}</code></td>
+                    <td>${device.ip_address || '-'}</td>
+                    <td><strong>${device.device_name}</strong></td>
+                    <td><span style="color: var(--${device.source === 'manual' ? 'success' : 'primary'});">${device.source}</span></td>
+                    <td style="color: var(--text-light);">${new Date(device.updated_at).toLocaleString()}</td>
+                    <td style="text-align: center;">
+                        <button onclick='openEditModal(${JSON.stringify(device)})' class="btn btn-sm" style="padding: 5px 10px; background: var(--primary);">
+                            <i class="fas fa-edit"></i> Düzenle
+                        </button>
+                    </td>
+                </tr>`;
+            });
+            
+            html += '</table>';
+            document.getElementById('device-list').innerHTML = html;
+        }
+        
+        function renderPagination(data) {
+            const { page, limit, total, totalPages } = data;
+            
+            if (total === 0) {
+                document.getElementById('pagination-controls').style.display = 'none';
+                return;
+            }
+            
+            document.getElementById('pagination-controls').style.display = 'block';
+            
+            // Update info text
+            const start = (page - 1) * limit + 1;
+            const end = Math.min(page * limit, total);
+            const searchText = currentSearch ? ` (filtered)` : '';
+            document.getElementById('pagination-info').textContent = 
+                `Showing ${start} to ${end} of ${total} devices${searchText}`;
+            
+            // Update page size selector
+            document.getElementById('page-size').value = limit;
+            
+            // Render page buttons
+            let buttonsHtml = '';
+            
+            // Previous button
+            if (page > 1) {
+                buttonsHtml += `<button onclick="changePage(${page - 1})" class="btn btn-sm" style="padding: 8px 12px;">
+                    <i class="fas fa-chevron-left"></i> Önceki
+                </button>`;
+            }
+            
+            // Page numbers
+            const maxButtons = 5;
+            let startPage = Math.max(1, page - Math.floor(maxButtons / 2));
+            let endPage = Math.min(totalPages, startPage + maxButtons - 1);
+            
+            // Adjust if we're near the end
+            if (endPage - startPage < maxButtons - 1) {
+                startPage = Math.max(1, endPage - maxButtons + 1);
+            }
+            
+            // First page + ellipsis
+            if (startPage > 1) {
+                buttonsHtml += `<button onclick="changePage(1)" class="btn btn-sm" style="padding: 8px 12px;">1</button>`;
+                if (startPage > 2) {
+                    buttonsHtml += `<span style="padding: 8px 12px; color: var(--text-light);">...</span>`;
+                }
+            }
+            
+            // Page number buttons
+            for (let i = startPage; i <= endPage; i++) {
+                const isActive = i === page;
+                const style = isActive 
+                    ? 'padding: 8px 12px; background: var(--primary); color: white; font-weight: bold;' 
+                    : 'padding: 8px 12px;';
+                buttonsHtml += `<button onclick="changePage(${i})" class="btn btn-sm" style="${style}">${i}</button>`;
+            }
+            
+            // Ellipsis + last page
+            if (endPage < totalPages) {
+                if (endPage < totalPages - 1) {
+                    buttonsHtml += `<span style="padding: 8px 12px; color: var(--text-light);">...</span>`;
+                }
+                buttonsHtml += `<button onclick="changePage(${totalPages})" class="btn btn-sm" style="padding: 8px 12px;">${totalPages}</button>`;
+            }
+            
+            // Next button
+            if (page < totalPages) {
+                buttonsHtml += `<button onclick="changePage(${page + 1})" class="btn btn-sm" style="padding: 8px 12px;">
+                    Sonraki <i class="fas fa-chevron-right"></i>
+                </button>`;
+            }
+            
+            document.getElementById('page-buttons').innerHTML = buttonsHtml;
+        }
+        
+        function changePage(page) {
+            currentPage = page;
+            loadDevices();
         }
         
         function openEditModal(device) {

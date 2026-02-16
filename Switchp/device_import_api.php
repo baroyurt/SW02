@@ -239,12 +239,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     
     switch ($action) {
         case 'list':
-            // List all devices
-            $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
-            $per_page = isset($_GET['per_page']) ? (int)$_GET['per_page'] : 50;
-            $offset = ($page - 1) * $per_page;
+            // List all devices with pagination and search
+            $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
+            $limit = isset($_GET['limit']) ? max(1, min(100, (int)$_GET['limit'])) : 10;
+            $offset = ($page - 1) * $limit;
             
-            $search = isset($_GET['search']) ? $_GET['search'] : '';
+            $search = isset($_GET['search']) ? trim($_GET['search']) : '';
             $where = '';
             $params = [];
             
@@ -264,6 +264,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             $total = $stmt->get_result()->fetch_assoc()['total'];
             $stmt->close();
             
+            // Calculate total pages
+            $totalPages = $total > 0 ? ceil($total / $limit) : 1;
+            
             // Get data
             $query = "
                 SELECT * FROM mac_device_registry 
@@ -273,11 +276,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             ";
             $stmt = $conn->prepare($query);
             if ($params) {
-                $all_params = array_merge($params, [$per_page, $offset]);
+                $all_params = array_merge($params, [$limit, $offset]);
                 $types = str_repeat('s', count($params)) . 'ii';
                 $stmt->bind_param($types, ...$all_params);
             } else {
-                $stmt->bind_param('ii', $per_page, $offset);
+                $stmt->bind_param('ii', $limit, $offset);
             }
             $stmt->execute();
             $result = $stmt->get_result();
@@ -292,7 +295,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 'success' => true,
                 'total' => $total,
                 'page' => $page,
-                'per_page' => $per_page,
+                'limit' => $limit,
+                'totalPages' => $totalPages,
                 'devices' => $devices
             ]);
             break;
