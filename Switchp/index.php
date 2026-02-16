@@ -2187,15 +2187,30 @@ header("Expires: 0");
                         <label class="form-label">Bağlantı Türü</label>
                         <select id="port-type" class="form-control">
                             <option value="BOŞ">BOŞ</option>
-                            <option value="AP">AP</option>
-                            <option value="IPTV">IPTV</option>
-                            <option value="DEVICE">DEVICE</option>
-                            <option value="OTOMASYON">OTOMASYON</option>
-                            <option value="FIBER">FIBER</option>
-                            <option value="SANTRAL">SANTRAL</option>
-                            <option value="SERVER">SERVER</option>
-                            <option value="ETHERNET">ETHERNET</option>
-                            <option value="HUB">HUB</option>
+                            <optgroup label="Device Types">
+                                <option value="AP">AP</option>
+                                <option value="IPTV">IPTV</option>
+                                <option value="DEVICE">DEVICE</option>
+                                <option value="OTOMASYON">OTOMASYON</option>
+                                <option value="FIBER">FIBER</option>
+                                <option value="SANTRAL">SANTRAL</option>
+                                <option value="SERVER">SERVER</option>
+                                <option value="ETHERNET">ETHERNET</option>
+                                <option value="HUB">HUB</option>
+                            </optgroup>
+                            <optgroup label="VLANs">
+                                <option value="VLAN 1">VLAN 1 - Default</option>
+                                <option value="VLAN 10">VLAN 10 - Management</option>
+                                <option value="VLAN 20">VLAN 20 - Users</option>
+                                <option value="VLAN 30">VLAN 30 - Guests</option>
+                                <option value="VLAN 40">VLAN 40 - IoT</option>
+                                <option value="VLAN 50">VLAN 50 - Voice</option>
+                                <option value="VLAN 60">VLAN 60 - Servers</option>
+                                <option value="VLAN 70">VLAN 70 - DMZ</option>
+                                <option value="VLAN 80">VLAN 80 - Security</option>
+                                <option value="VLAN 90">VLAN 90 - IPTV</option>
+                                <option value="VLAN 100">VLAN 100 - Printers</option>
+                            </optgroup>
                         </select>
                     </div>
                 </div>
