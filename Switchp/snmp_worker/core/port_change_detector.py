@@ -5,6 +5,7 @@ Monitors MAC addresses, VLANs, descriptions, and creates alarms for changes.
 
 import logging
 import json
+import re
 from typing import Optional, Dict, List, Tuple, Any
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
@@ -23,6 +24,9 @@ class PortChangeDetector:
     Detects and tracks changes in port configurations.
     Compares current state with previous snapshots to identify changes.
     """
+    
+    # MAC address validation pattern (XX:XX:XX:XX:XX:XX where X is hex digit)
+    MAC_ADDRESS_PATTERN = re.compile(r'^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$')
     
     def __init__(
         self,
@@ -227,6 +231,36 @@ class PortChangeDetector:
         
         return macs
     
+    def _get_switch_id_from_device(
+        self,
+        session: Session,
+        device_id: int
+    ) -> Optional[int]:
+        """
+        Get switch_id from switches table using SNMP device_id.
+        
+        Args:
+            session: Database session
+            device_id: SNMP device ID
+            
+        Returns:
+            Switch ID if found, None otherwise
+        """
+        try:
+            switch_query = """
+                SELECT s.id 
+                FROM switches s 
+                INNER JOIN snmp_devices sd ON s.ip = sd.ip_address 
+                WHERE sd.id = :device_id
+                LIMIT 1
+            """
+            switch_result = session.execute(switch_query, {'device_id': device_id})
+            switch_row = switch_result.fetchone()
+            return switch_row[0] if switch_row else None
+        except Exception as e:
+            self.logger.debug(f"Could not get switch_id for device {device_id}: {e}")
+            return None
+    
     def _handle_mac_added_or_moved(
         self,
         session: Session,
@@ -242,10 +276,71 @@ class PortChangeDetector:
             MACAddressTracking.mac_address == mac_address
         ).first()
         
+        # Also check if the MAC is documented in the ports table (manual connections)
+        port_has_this_mac = False
+        try:
+            # Get switch_id for current device using helper method
+            switch_id = self._get_switch_id_from_device(session, device.id)
+            
+            if switch_id:
+                # Validate MAC address format using regex
+                # MAC should be in format XX:XX:XX:XX:XX:XX where X is a hex digit
+                if not self.MAC_ADDRESS_PATTERN.match(mac_address):
+                    raise ValueError(
+                        f"Invalid MAC address format: {mac_address}. "
+                        f"Expected format: XX:XX:XX:XX:XX:XX"
+                    )
+                
+                # Check if this port already has this MAC documented
+                # Using exact match only for performance
+                port_mac_query = """
+                    SELECT id, mac
+                    FROM ports 
+                    WHERE switch_id = :switch_id 
+                    AND port_no = :port_no 
+                    AND mac = :mac_address
+                    LIMIT 1
+                """
+                port_mac_result = session.execute(port_mac_query, {
+                    'switch_id': switch_id,
+                    'port_no': port_number,
+                    'mac_address': mac_address
+                })
+                port_mac_row = port_mac_result.fetchone()
+                
+                if port_mac_row:
+                    port_has_this_mac = True
+                    self.logger.debug(
+                        f"MAC {mac_address} is already documented on {device.name} "
+                        f"port {port_number} in ports table"
+                    )
+        except ValueError as e:
+            self.logger.warning(f"MAC address validation error: {e}")
+        except Exception as e:
+            self.logger.warning(
+                f"Could not query ports table for MAC check on {device.name} "
+                f"port {port_number}: {e}"
+            )
+        
         if mac_tracking:
             # MAC exists - check if it moved
             if (mac_tracking.current_device_id != device.id or
                 mac_tracking.current_port_number != port_number):
+                
+                # Before creating an alarm, check if the MAC is staying on the same port
+                # according to the manual ports table
+                if port_has_this_mac:
+                    # MAC is documented on this port, so it's not really moving
+                    # Just update the tracking to match reality
+                    self.logger.info(
+                        f"MAC {mac_address} detected on {device.name} port {port_number} "
+                        f"- matches existing port configuration, no alarm needed"
+                    )
+                    mac_tracking.current_device_id = device.id
+                    mac_tracking.current_port_number = port_number
+                    mac_tracking.current_vlan_id = vlan_id
+                    mac_tracking.last_seen = datetime.utcnow()
+                    return None
                 
                 # MAC moved!
                 old_device = None
@@ -280,6 +375,25 @@ class PortChangeDetector:
                 mac_tracking.last_seen = datetime.utcnow()
                 return None
         else:
+            # New MAC - but check if it's already documented in ports table
+            if port_has_this_mac:
+                # MAC is already documented on this port, initialize tracking without alarm
+                self.logger.info(
+                    f"Initializing tracking for MAC {mac_address} on {device.name} "
+                    f"port {port_number} - matches existing port configuration"
+                )
+                mac_tracking = MACAddressTracking(
+                    mac_address=mac_address,
+                    current_device_id=device.id,
+                    current_port_number=port_number,
+                    current_vlan_id=vlan_id,
+                    first_seen=datetime.utcnow(),
+                    last_seen=datetime.utcnow(),
+                    move_count=0
+                )
+                session.add(mac_tracking)
+                return None
+            
             # New MAC - create tracking entry
             mac_tracking = MACAddressTracking(
                 mac_address=mac_address,
@@ -351,8 +465,49 @@ class PortChangeDetector:
         old_device_name = old_device.name if old_device else "Unknown"
         old_port_str = str(old_port) if old_port else "Unknown"
         
+        # Try to get the actual port connection info from the ports table
+        # This is where manual port connections are stored via "Port Bağlantısını Düzenle"
+        old_port_connection = None
+        if old_device and old_port:
+            try:
+                # Get switch_id using helper method
+                switch_id = self._get_switch_id_from_device(session, old_device.id)
+                
+                if switch_id:
+                    # Now get the port connection info
+                    port_query = """
+                        SELECT connected_to, device, type
+                        FROM ports 
+                        WHERE switch_id = :switch_id AND port_no = :port_no
+                        LIMIT 1
+                    """
+                    port_result = session.execute(port_query, {
+                        'switch_id': switch_id,
+                        'port_no': old_port
+                    })
+                    port_row = port_result.fetchone()
+                    
+                    if port_row and port_row[0]:
+                        # Use the connected_to field as the old value
+                        old_port_connection = port_row[0]
+                    elif port_row and port_row[1]:
+                        # Fallback to device field if connected_to is empty
+                        old_port_connection = port_row[1]
+            except Exception as e:
+                # If query fails, log warning and continue with default
+                self.logger.warning(
+                    f"Could not query ports table for old connection info on "
+                    f"{old_device.name} port {old_port}: {e}"
+                )
+        
+        # Use the manual connection info if found, otherwise use "Unknown"
+        if old_port_connection:
+            old_value_display = old_port_connection
+        else:
+            old_value_display = f"{old_device_name} port {old_port_str}"
+        
         change_details = (
-            f"MAC {mac_address} moved from {old_device_name} port {old_port_str} "
+            f"MAC {mac_address} moved from {old_value_display} "
             f"to {new_device.name} port {new_port}"
         )
         
@@ -393,7 +548,8 @@ class PortChangeDetector:
             change.alarm_id = alarm.id
             
             # Add old/new value details to alarm
-            alarm.old_value = f"{old_device_name} port {old_port_str}"
+            # Use the connection info if available
+            alarm.old_value = old_value_display
             alarm.new_value = f"{new_device.name} port {new_port}"
             
             # Send notifications
