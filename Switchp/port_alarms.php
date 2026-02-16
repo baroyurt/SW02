@@ -363,16 +363,24 @@ $pageTitle = "Port Change Alarms";
             width: 100%;
             height: 100%;
             background: rgba(0,0,0,0.5);
+            overflow: auto;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal.show {
+            display: flex !important;
         }
         
         .modal-content {
             background: white;
-            margin: 5% auto;
             padding: 30px;
             border-radius: 15px;
             width: 90%;
             max-width: 600px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            position: relative;
+            margin: auto;
         }
         
         .modal-header {
@@ -494,16 +502,16 @@ $pageTitle = "Port Change Alarms";
     <div id="acknowledgeModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2>Acknowledge Alarm</h2>
+                <h2>Alarmı Onayla</h2>
                 <span class="close" onclick="closeModal('acknowledgeModal')">&times;</span>
             </div>
             <div class="form-group">
-                <label>Note (Optional):</label>
-                <textarea id="ackNote" rows="3" placeholder="Add a note about this change..."></textarea>
+                <label>Not (Opsiyonel):</label>
+                <textarea id="ackNote" rows="3" placeholder="Bu değişiklik hakkında not ekleyin..."></textarea>
             </div>
             <div class="alarm-actions">
                 <button class="btn btn-acknowledge" onclick="confirmAcknowledge()">
-                    <i class="fas fa-check"></i> Acknowledge as Known Change
+                    <i class="fas fa-check"></i> Bilinen Değişiklik Olarak Onayla
                 </button>
             </div>
         </div>
@@ -513,21 +521,21 @@ $pageTitle = "Port Change Alarms";
     <div id="silenceModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2>Silence Alarm</h2>
+                <h2>Alarmı Sesize Al</h2>
                 <span class="close" onclick="closeModal('silenceModal')">&times;</span>
             </div>
             <div class="form-group">
-                <label>Silence Duration:</label>
+                <label>Sesize Alma Süresi:</label>
                 <select id="silenceDuration">
-                    <option value="1">1 Hour</option>
-                    <option value="4">4 Hours</option>
-                    <option value="24" selected>24 Hours</option>
-                    <option value="168">7 Days</option>
+                    <option value="1">1 Saat</option>
+                    <option value="4">4 Saat</option>
+                    <option value="24" selected>24 Saat</option>
+                    <option value="168">7 Gün</option>
                 </select>
             </div>
             <div class="alarm-actions">
                 <button class="btn btn-silence" onclick="confirmSilence()">
-                    <i class="fas fa-volume-mute"></i> Silence Alarm
+                    <i class="fas fa-volume-mute"></i> Alarmı Sesize Al
                 </button>
             </div>
         </div>
@@ -684,14 +692,14 @@ $pageTitle = "Port Change Alarms";
                         <div class="alarm-actions">
                             ${!alarm.acknowledged_at ? `
                                 <button class="btn btn-acknowledge" onclick="showAcknowledgeModal(${alarm.id})">
-                                    <i class="fas fa-check"></i> Acknowledge as Known
+                                    <i class="fas fa-check"></i> Bilgi Dahilinde
                                 </button>
                                 <button class="btn btn-silence" onclick="showSilenceModal(${alarm.id})">
-                                    <i class="fas fa-volume-mute"></i> Silence Alarm
+                                    <i class="fas fa-volume-mute"></i> Sesize Al
                                 </button>
                             ` : ''}
                             <button class="btn btn-details" onclick="showAlarmDetails(${alarm.id}, ${alarm.device_id}, ${alarm.port_number})">
-                                <i class="fas fa-info-circle"></i> Details
+                                <i class="fas fa-info-circle"></i> Port Detayları
                             </button>
                         </div>
                     </div>
@@ -736,16 +744,22 @@ $pageTitle = "Port Change Alarms";
         
         function showAcknowledgeModal(alarmId) {
             currentAlarmId = alarmId;
-            document.getElementById('acknowledgeModal').style.display = 'block';
+            const modal = document.getElementById('acknowledgeModal');
+            modal.classList.add('show');
+            modal.style.display = 'flex';
         }
         
         function showSilenceModal(alarmId) {
             currentAlarmId = alarmId;
-            document.getElementById('silenceModal').style.display = 'block';
+            const modal = document.getElementById('silenceModal');
+            modal.classList.add('show');
+            modal.style.display = 'flex';
         }
         
         function closeModal(modalId) {
-            document.getElementById(modalId).style.display = 'none';
+            const modal = document.getElementById(modalId);
+            modal.classList.remove('show');
+            modal.style.display = 'none';
         }
         
         async function confirmAcknowledge() {
@@ -805,8 +819,21 @@ $pageTitle = "Port Change Alarms";
         }
         
         function showAlarmDetails(alarmId, deviceId, portNumber) {
-            // Open device details in index.php
-            window.location.href = `index.php#device-${deviceId}-port-${portNumber}`;
+            // If we're on port_alarms.php, redirect to index.php with proper hash
+            // If we're on index.php (embedded component), use the navigate function
+            if (typeof navigateToAlarmPort === 'function') {
+                // We're on index.php, use the existing function
+                navigateToAlarmPort(deviceId, portNumber, '', '');
+            } else {
+                // We're on port_alarms.php, redirect to index.php
+                window.location.href = `index.php`;
+                // After redirect, we'll need to navigate to the device
+                // Store this in sessionStorage to handle after page load
+                sessionStorage.setItem('navigateToDevice', JSON.stringify({
+                    deviceId: deviceId,
+                    portNumber: portNumber
+                }));
+            }
         }
         
         function showError(message) {
