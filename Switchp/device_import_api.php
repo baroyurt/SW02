@@ -503,6 +503,68 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_FILES['excel_file'])) {
         $conn->close();
         exit;
     }
+    
+    // Handle apply_to_ports action
+    if ($action === 'apply_to_ports') {
+        $conn = getDBConnection();
+        
+        try {
+            // Get all devices from registry
+            $result = $conn->query("
+                SELECT mac_address, ip_address, device_name 
+                FROM mac_device_registry 
+                WHERE mac_address IS NOT NULL 
+                AND ip_address IS NOT NULL 
+                AND device_name IS NOT NULL
+            ");
+            
+            if (!$result) {
+                echo json_encode(['success' => false, 'error' => 'Database query failed']);
+                exit;
+            }
+            
+            $updated_count = 0;
+            
+            // For each device, find and update matching ports
+            while ($device = $result->fetch_assoc()) {
+                $mac = $device['mac_address'];
+                $ip = $device['ip_address'];
+                $hostname = $device['device_name'];
+                
+                // Normalize MAC for comparison (remove colons, lowercase)
+                $macNormalized = strtolower(str_replace(':', '', $mac));
+                
+                // Update port connections where MAC matches
+                // Join with snmp_ports to get MAC, update port_connections
+                $updateStmt = $conn->prepare("
+                    UPDATE port_connections pc
+                    INNER JOIN snmp_ports sp ON pc.port_id = sp.id
+                    SET pc.ip = ?, pc.connection_info = ?
+                    WHERE LOWER(REPLACE(sp.mac, ':', '')) = ?
+                ");
+                
+                if ($updateStmt) {
+                    $updateStmt->bind_param('sss', $ip, $hostname, $macNormalized);
+                    $updateStmt->execute();
+                    $updated_count += $updateStmt->affected_rows;
+                    $updateStmt->close();
+                }
+            }
+            
+            $result->close();
+            
+            echo json_encode([
+                'success' => true,
+                'updated_count' => $updated_count,
+                'message' => "$updated_count port connections updated"
+            ]);
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        }
+        
+        $conn->close();
+        exit;
+    }
 }
 
 // Handle DELETE

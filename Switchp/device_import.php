@@ -437,6 +437,12 @@ $currentUser = $auth->getUser();
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 15px;">
                 <h2 style="margin: 0;"><i class="fas fa-list"></i> Registered Devices</h2>
                 
+                <!-- Apply to Ports Button -->
+                <button id="applyToPortsBtn" class="btn btn-success" onclick="applyDeviceImportToPorts()" 
+                        style="background: var(--success); padding: 10px 20px;">
+                    <i class="fas fa-download"></i> Portlara Uygula
+                </button>
+                
                 <!-- Search Box -->
                 <div style="position: relative; flex: 1; min-width: 300px; max-width: 500px;">
                     <input type="text" id="device-search" placeholder="🔍 Search by MAC, IP, or Hostname..." 
@@ -958,6 +964,38 @@ $currentUser = $auth->getUser();
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
+        }
+        
+        // Bulk apply Device Import data to all matching ports
+        async function applyDeviceImportToPorts() {
+            if (!confirm('Device Import verilerini tüm eşleşen portlara uygulamak istiyor musunuz?\n\nBu işlem, MAC adresi eşleşen tüm port bağlantılarının IP ve Hostname bilgilerini güncelleyecektir.')) {
+                return;
+            }
+            
+            const btn = document.getElementById('applyToPortsBtn');
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uygulanıyor...';
+            
+            try {
+                const response = await fetch('device_import_api.php?action=apply_to_ports', {
+                    method: 'POST'
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert(`Başarılı! ${data.updated_count} port bağlantısı güncellendi.`);
+                } else {
+                    alert('Hata: ' + (data.error || 'Bilinmeyen hata'));
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Hata: ' + error.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
         }
         
         // Load devices on page load
