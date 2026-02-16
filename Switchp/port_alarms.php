@@ -8,6 +8,11 @@ $auth->requireLogin();
 
 $currentUser = $auth->getUser();
 
+// Prevent caching
+header('Cache-Control: no-cache, no-store, must-revalidate');
+header('Pragma: no-cache');
+header('Expires: 0');
+
 // Fetch alarm data server-side to avoid CORS issues in sandboxed iframe
 function getActiveAlarmsData($conn) {
     $columns_to_select = "a.id, a.device_id, a.alarm_type, a.severity, a.status,
@@ -626,15 +631,40 @@ $alarmsData = getActiveAlarmsData($conn);
     </div>
     
     <script>
-        // Embed alarm data from server-side (avoids CORS issues)
-        const alarmsData = <?php echo json_encode($alarmsData); ?>;
+        // Alarm data loaded dynamically to avoid caching issues
+        let alarmsData = [];
         let currentFilter = 'all';
         let selectedAlarmId = null;
         
+        // Load alarms from API
+        async function loadAlarms() {
+            try {
+                const response = await fetch('port_change_api.php?action=get_active_alarms');
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    alarmsData = data.alarms || [];
+                    displayAlarms(alarmsData);
+                    updateStats(alarmsData);
+                } else {
+                    console.error('Failed to load alarms:', data.error || data.message);
+                }
+            } catch (error) {
+                console.error('Error loading alarms:', error);
+            }
+        }
+        
         // Initialize on page load
         document.addEventListener('DOMContentLoaded', function() {
-            displayAlarms(alarmsData);
-            updateStats(alarmsData);
+            loadAlarms();  // Initial load
+            
+            // Auto-refresh every 30 seconds
+            setInterval(loadAlarms, 30000);
         });
         
         function displayAlarms(alarms) {
@@ -790,7 +820,7 @@ $alarmsData = getActiveAlarmsData($conn);
         }
         
         function refreshPage() {
-            location.reload();
+            loadAlarms();  // Reload alarm data instead of page
         }
         
         function openAckModal(alarmId) {
@@ -834,7 +864,7 @@ $alarmsData = getActiveAlarmsData($conn);
                 if (data.success) {
                     alert('Alarm başarıyla kapatıldı');
                     closeAckModal();
-                    location.reload();
+                    loadAlarms();  // Reload alarm data instead of page
                 } else {
                     alert('Hata: ' + (data.error || 'Bilinmeyen hata'));
                 }
@@ -863,7 +893,7 @@ $alarmsData = getActiveAlarmsData($conn);
                 if (data.success) {
                     alert('Alarm başarıyla sesize alındı');
                     closeSilenceModal();
-                    location.reload();
+                    loadAlarms();  // Reload alarm data instead of page
                 } else {
                     alert('Hata: ' + (data.error || 'Bilinmeyen hata'));
                 }
@@ -891,7 +921,7 @@ $alarmsData = getActiveAlarmsData($conn);
                 
                 if (data.success) {
                     alert('Alarm sessizlikten çıkarıldı');
-                    location.reload();
+                    loadAlarms();  // Reload alarm data instead of page
                 } else {
                     alert('Hata: ' + (data.error || 'Bilinmeyen hata'));
                 }
