@@ -1756,6 +1756,11 @@ header("Expires: 0");
             </div>
             
             <!-- Port Alarms Component -->
+            <!-- Security Note: allow-same-origin + allow-scripts is intentional and safe here because:
+                 1. iframe loads our own PHP file (port_alarms.php), not external content
+                 2. Content is server-side rendered and authenticated
+                 3. No user-generated HTML/JavaScript
+                 4. Required for API calls and session management -->
             <iframe src="port_alarms.php" 
                     sandbox="allow-scripts allow-same-origin allow-forms allow-downloads allow-modals"
                     style="width: 100%; height: calc(100vh - 150px); border: none; border-radius: 15px; background: var(--dark);"
@@ -1774,6 +1779,11 @@ header("Expires: 0");
             </div>
             
             <!-- Device Import Component -->
+            <!-- Security Note: allow-same-origin + allow-scripts is intentional and safe here because:
+                 1. iframe loads our own PHP file (device_import.php), not external content
+                 2. Content is server-side rendered and authenticated
+                 3. No user-generated HTML/JavaScript
+                 4. Required for API calls and session management -->
             <iframe src="device_import.php" 
                     sandbox="allow-scripts allow-same-origin allow-forms allow-downloads allow-modals"
                     style="width: 100%; height: calc(100vh - 150px); border: none; border-radius: 15px; background: var(--dark);"

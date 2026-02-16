@@ -353,10 +353,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     exit;
 }
 
-// Handle POST - Manual entry
+// Handle POST - Manual entry and other actions
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_FILES['excel_file'])) {
     $data = json_decode(file_get_contents('php://input'), true);
-    $action = $data['action'] ?? '';
+    // Check for action in query params first, then in JSON body
+    $action = $_GET['action'] ?? ($data['action'] ?? '');
     
     if ($action === 'manual_add') {
         $ip = isset($data['ip_address']) ? trim($data['ip_address']) : null;
