@@ -227,6 +227,36 @@ class PortChangeDetector:
         
         return macs
     
+    def _get_switch_id_from_device(
+        self,
+        session: Session,
+        device_id: int
+    ) -> Optional[int]:
+        """
+        Get switch_id from switches table using SNMP device_id.
+        
+        Args:
+            session: Database session
+            device_id: SNMP device ID
+            
+        Returns:
+            Switch ID if found, None otherwise
+        """
+        try:
+            switch_query = """
+                SELECT s.id 
+                FROM switches s 
+                INNER JOIN snmp_devices sd ON s.ip = sd.ip_address 
+                WHERE sd.id = :device_id
+                LIMIT 1
+            """
+            switch_result = session.execute(switch_query, {'device_id': device_id})
+            switch_row = switch_result.fetchone()
+            return switch_row[0] if switch_row else None
+        except Exception as e:
+            self.logger.debug(f"Could not get switch_id for device {device_id}: {e}")
+            return None
+    
     def _handle_mac_added_or_moved(
         self,
         session: Session,
@@ -245,34 +275,29 @@ class PortChangeDetector:
         # Also check if the MAC is documented in the ports table (manual connections)
         port_has_this_mac = False
         try:
-            # Get switch_id for current device
-            switch_query = """
-                SELECT s.id 
-                FROM switches s 
-                INNER JOIN snmp_devices sd ON s.ip = sd.ip_address 
-                WHERE sd.id = :device_id
-                LIMIT 1
-            """
-            switch_result = session.execute(switch_query, {'device_id': device.id})
-            switch_row = switch_result.fetchone()
+            # Get switch_id for current device using helper method
+            switch_id = self._get_switch_id_from_device(session, device.id)
             
-            if switch_row:
-                switch_id = switch_row[0]
+            if switch_id:
+                # Validate MAC address format (basic check)
+                # MAC should be in format XX:XX:XX:XX:XX:XX
+                if not mac_address or len(mac_address) != 17:
+                    raise ValueError(f"Invalid MAC address format: {mac_address}")
                 
                 # Check if this port already has this MAC documented
+                # Using exact match only for performance
                 port_mac_query = """
                     SELECT id, mac
                     FROM ports 
                     WHERE switch_id = :switch_id 
                     AND port_no = :port_no 
-                    AND (mac = :mac_address OR mac LIKE :mac_like)
+                    AND mac = :mac_address
                     LIMIT 1
                 """
                 port_mac_result = session.execute(port_mac_query, {
                     'switch_id': switch_id,
                     'port_no': port_number,
-                    'mac_address': mac_address,
-                    'mac_like': f'%{mac_address}%'
+                    'mac_address': mac_address
                 })
                 port_mac_row = port_mac_result.fetchone()
                 
@@ -282,8 +307,13 @@ class PortChangeDetector:
                         f"MAC {mac_address} is already documented on {device.name} "
                         f"port {port_number} in ports table"
                     )
+        except ValueError as e:
+            self.logger.warning(f"MAC address validation error: {e}")
         except Exception as e:
-            self.logger.debug(f"Could not query ports table for MAC check: {e}")
+            self.logger.warning(
+                f"Could not query ports table for MAC check on {device.name} "
+                f"port {port_number}: {e}"
+            )
         
         if mac_tracking:
             # MAC exists - check if it moved
@@ -433,21 +463,10 @@ class PortChangeDetector:
         old_port_connection = None
         if old_device and old_port:
             try:
-                # Query the ports table to get the connected_to field
-                # First get the switch_id from switches table using device name
-                switch_query = """
-                    SELECT s.id 
-                    FROM switches s 
-                    INNER JOIN snmp_devices sd ON s.ip = sd.ip_address 
-                    WHERE sd.id = :device_id
-                    LIMIT 1
-                """
-                switch_result = session.execute(switch_query, {'device_id': old_device.id})
-                switch_row = switch_result.fetchone()
+                # Get switch_id using helper method
+                switch_id = self._get_switch_id_from_device(session, old_device.id)
                 
-                if switch_row:
-                    switch_id = switch_row[0]
-                    
+                if switch_id:
                     # Now get the port connection info
                     port_query = """
                         SELECT connected_to, device, type
@@ -468,8 +487,11 @@ class PortChangeDetector:
                         # Fallback to device field if connected_to is empty
                         old_port_connection = port_row[1]
             except Exception as e:
-                # If query fails, just log and continue with default
-                self.logger.debug(f"Could not query ports table: {e}")
+                # If query fails, log warning and continue with default
+                self.logger.warning(
+                    f"Could not query ports table for old connection info on "
+                    f"{old_device.name} port {old_port}: {e}"
+                )
         
         # Use the manual connection info if found, otherwise use "Unknown"
         if old_port_connection:

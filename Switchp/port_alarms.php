@@ -684,10 +684,10 @@ $pageTitle = "Port Change Alarms";
                         <div class="alarm-actions">
                             ${!alarm.acknowledged_at ? `
                                 <button class="btn btn-acknowledge" onclick="showAcknowledgeModal(${alarm.id})">
-                                    <i class="fas fa-check"></i> Bilgi Dahilinde Kapat
+                                    <i class="fas fa-check"></i> Acknowledge as Known
                                 </button>
                                 <button class="btn btn-silence" onclick="showSilenceModal(${alarm.id})">
-                                    <i class="fas fa-volume-mute"></i> Alarmı Sesize Al
+                                    <i class="fas fa-volume-mute"></i> Silence Alarm
                                 </button>
                             ` : ''}
                             <button class="btn btn-details" onclick="showAlarmDetails(${alarm.id}, ${alarm.device_id}, ${alarm.port_number})">
