@@ -52,14 +52,17 @@ try {
         case 'unsilence_alarm':
             $alarmId = isset($_REQUEST['alarm_id']) ? intval($_REQUEST['alarm_id']) : 0;
             if ($alarmId > 0) {
-                $updateSql = "UPDATE alarms SET is_silenced = 0, silence_until = NULL WHERE id = ?";
+                // Primary update: Clear silence_until (column always exists)
+                $updateSql = "UPDATE alarms SET silence_until = NULL WHERE id = ?";
                 $stmt = $conn->prepare($updateSql);
                 $stmt->bind_param('i', $alarmId);
                 
                 if ($stmt->execute()) {
+                    // Optional: Also clear is_silenced if column exists (won't break if it doesn't)
+                    $conn->query("UPDATE alarms SET is_silenced = 0 WHERE id = $alarmId");
                     echo json_encode(['success' => true, 'message' => 'Alarm unsilenced successfully']);
                 } else {
-                    echo json_encode(['success' => false, 'error' => 'Failed to unsilence alarm']);
+                    echo json_encode(['success' => false, 'error' => $stmt->error]);
                 }
                 $stmt->close();
             } else {
