@@ -4252,6 +4252,66 @@ function confirmDeleteRack(rackId) {
         }
 
         // MAC adresine göre Device Import registry'den cihaz bilgilerini al
+        // Auto-save helper function
+        function autoFillField(input, value) {
+            if (value && (!input.value || input.value.trim() === '')) {
+                input.value = value;
+                // Görsel feedback
+                input.style.backgroundColor = '#dcfce7'; // Açık yeşil
+                setTimeout(() => {
+                    input.style.backgroundColor = '';
+                }, 2000);
+                return true; // Field was filled
+            }
+            return false; // Field was not filled
+        }
+
+        // Auto-save port connection after Device Import lookup
+        async function autoSavePortConnection() {
+            try {
+                const portId = document.getElementById('port-id').value;
+                const mac = document.getElementById('port-mac').value;
+                
+                // Only save if we have essentials
+                if (!portId || !mac) {
+                    console.log('Auto-save skipped: missing required fields');
+                    return;
+                }
+                
+                const formData = new FormData();
+                formData.append('port_id', portId);
+                formData.append('switch_id', document.getElementById('port-switch-id').value);
+                formData.append('port_number', document.getElementById('port-number').value);
+                formData.append('mac', mac);
+                formData.append('ip', document.getElementById('port-ip').value || '');
+                formData.append('user_name', document.getElementById('port-user').value || '');
+                formData.append('location', document.getElementById('port-location').value || '');
+                formData.append('department', document.getElementById('port-department').value || '');
+                formData.append('notes', document.getElementById('port-notes').value || '');
+                formData.append('connection_type', document.getElementById('port-connection-type').value || '');
+                formData.append('connection_info', document.getElementById('port-connection-info').value || '');
+                
+                const response = await fetch('getData.php?action=updatePortConnection', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showToast('Port bağlantısı otomatik kaydedildi (Device Import)', 'success');
+                    closePortModal();
+                    // Refresh current page to show updated data
+                    loadCurrentPage();
+                } else {
+                    console.error('Auto-save failed:', result.error);
+                }
+            } catch (error) {
+                console.error('Auto-save exception:', error);
+                // Silent failure - modal stays open, user can manually save
+            }
+        }
+
         async function lookupDeviceByMac(mac) {
             if (!mac || mac.trim() === '') return;
             
@@ -4264,29 +4324,22 @@ function confirmDeleteRack(rackId) {
                     const ipInput = document.getElementById('port-ip');
                     const connectionInfoInput = document.getElementById('port-connection-info');
                     
-                    // IP adresini doldur (sadece boşsa)
-                    if (device.ip_address && (!ipInput.value || ipInput.value.trim() === '')) {
-                        ipInput.value = device.ip_address;
-                        // Görsel feedback
-                        ipInput.style.backgroundColor = '#dcfce7'; // Açık yeşil
-                        setTimeout(() => {
-                            ipInput.style.backgroundColor = '';
-                        }, 2000);
-                    }
-                    
-                    // Hostname'i Connection Info'ya doldur (sadece boşsa)
-                    if (device.device_name && (!connectionInfoInput.value || connectionInfoInput.value.trim() === '')) {
-                        connectionInfoInput.value = device.device_name;
-                        // Görsel feedback
-                        connectionInfoInput.style.backgroundColor = '#dcfce7'; // Açık yeşil
-                        setTimeout(() => {
-                            connectionInfoInput.style.backgroundColor = '';
-                        }, 2000);
-                    }
+                    // Use helper function to fill and track if fields were filled
+                    const ipFilled = autoFillField(ipInput, device.ip_address);
+                    const infoFilled = autoFillField(connectionInfoInput, device.device_name);
                     
                     // Kullanıcıya bilgi ver
-                    if (device.ip_address || device.device_name) {
+                    if (ipFilled || infoFilled) {
                         showToast('Device Import kaydı bulundu ve bilgiler dolduruldu', 'success', 3000);
+                        
+                        // Auto-save if we're in edit mode (has port-id) and fields were filled
+                        const isEditMode = document.getElementById('port-id').value !== '';
+                        if (isEditMode && (ipFilled || infoFilled)) {
+                            // Small delay to let user see the auto-fill
+                            setTimeout(() => {
+                                autoSavePortConnection();
+                            }, 1000);
+                        }
                     }
                 } else {
                     // Kayıt bulunamadı - sessizce devam et, hata gösterme
