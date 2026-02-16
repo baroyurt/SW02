@@ -49,6 +49,24 @@ try {
             silenceAlarm($conn, $auth, $alarmId, $duration);
             break;
             
+        case 'unsilence_alarm':
+            $alarmId = isset($_REQUEST['alarm_id']) ? intval($_REQUEST['alarm_id']) : 0;
+            if ($alarmId > 0) {
+                $updateSql = "UPDATE alarms SET is_silenced = 0, silence_until = NULL WHERE id = ?";
+                $stmt = $conn->prepare($updateSql);
+                $stmt->bind_param('i', $alarmId);
+                
+                if ($stmt->execute()) {
+                    echo json_encode(['success' => true, 'message' => 'Alarm unsilenced successfully']);
+                } else {
+                    echo json_encode(['success' => false, 'error' => 'Failed to unsilence alarm']);
+                }
+                $stmt->close();
+            } else {
+                echo json_encode(['success' => false, 'error' => 'Invalid alarm ID']);
+            }
+            break;
+            
         case 'get_alarm_details':
             $alarmId = isset($_GET['alarm_id']) ? intval($_GET['alarm_id']) : 0;
             getAlarmDetails($conn, $alarmId);

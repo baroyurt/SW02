@@ -535,15 +535,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_FILES['excel_file'])) {
                 // Normalize MAC for comparison (remove colons, lowercase)
                 $macNormalized = strtolower(str_replace(':', '', $mac));
                 
-                // Update snmp_ports table directly (port_connections table doesn't exist)
-                // Append IP and hostname to port description
+                // Update ports table (same as Port Edit uses)
+                // Update ip and connection_info columns
                 $updateStmt = $conn->prepare("
-                    UPDATE snmp_ports 
-                    SET port_description = CONCAT(
-                        COALESCE(port_description, ''),
-                        ' [IP: ', ?, ']',
-                        ' [Device: ', ?, ']'
-                    )
+                    UPDATE ports 
+                    SET ip = ?, 
+                        connection_info = ?
                     WHERE LOWER(REPLACE(mac, ':', '')) = ?
                     AND mac IS NOT NULL 
                     AND mac != ''

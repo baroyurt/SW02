@@ -716,9 +716,15 @@ $alarmsData = getActiveAlarmsData($conn);
                             <button class="btn btn-primary" onclick="openAckModal(${alarm.id})">
                                 <i class="fas fa-check"></i> Bilgi Dahilinde Kapat
                             </button>
-                            <button class="btn btn-secondary" onclick="openSilenceModal(${alarm.id})">
-                                <i class="fas fa-bell-slash"></i> ${alarm.is_silenced ? 'Sessizliği Yönet' : 'Alarmı Sesize Al'}
-                            </button>
+                            ${alarm.is_silenced ? `
+                                <button class="btn btn-warning" onclick="unsilenceAlarm(${alarm.id})">
+                                    <i class="fas fa-bell"></i> Sessizlikten Çıkar
+                                </button>
+                            ` : `
+                                <button class="btn btn-secondary" onclick="openSilenceModal(${alarm.id})">
+                                    <i class="fas fa-bell-slash"></i> Alarmı Sesize Al
+                                </button>
+                            `}
                             ${alarm.port_number ? `
                                 <button class="btn btn-secondary" onclick="viewPort('${alarm.device_name}', ${alarm.port_number})">
                                     <i class="fas fa-eye"></i> View Port
@@ -857,6 +863,34 @@ $alarmsData = getActiveAlarmsData($conn);
                 if (data.success) {
                     alert('Alarm başarıyla sesize alındı');
                     closeSilenceModal();
+                    location.reload();
+                } else {
+                    alert('Hata: ' + (data.error || 'Bilinmeyen hata'));
+                }
+            } catch (error) {
+                alert('Hata: ' + error.message);
+            }
+        }
+        
+        async function unsilenceAlarm(alarmId) {
+            if (!confirm('Bu alarmı sessizlikten çıkarmak istiyor musunuz?')) {
+                return;
+            }
+            
+            try {
+                const formData = new FormData();
+                formData.append('action', 'unsilence_alarm');
+                formData.append('alarm_id', alarmId);
+                
+                const response = await fetch('port_change_api.php', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert('Alarm sessizlikten çıkarıldı');
                     location.reload();
                 } else {
                     alert('Hata: ' + (data.error || 'Bilinmeyen hata'));

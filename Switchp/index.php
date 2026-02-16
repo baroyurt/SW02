@@ -4349,12 +4349,19 @@ function confirmDeleteRack(rackId) {
                     const ipInput = document.getElementById('port-ip');
                     const connectionInfoInput = document.getElementById('port-connection-info');
                     
+                    // Check if elements exist before proceeding
+                    if (!ipInput || !connectionInfoInput) {
+                        console.error('Port form elements not found');
+                        return;
+                    }
+                    
                     // Use helper function to fill and track if fields were filled
                     const ipFilled = autoFillField(ipInput, device.ip_address);
                     const infoFilled = autoFillField(connectionInfoInput, device.device_name);
                     
                     // Auto-save if we're in edit mode (has port-id) and fields were filled
-                    const isEditMode = document.getElementById('port-id').value !== '';
+                    const portIdElement = document.getElementById('port-id');
+                    const isEditMode = portIdElement && portIdElement.value !== '';
                     if (isEditMode && (ipFilled || infoFilled)) {
                         // Immediately save to database
                         await autoSavePortConnection();
