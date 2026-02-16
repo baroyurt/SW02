@@ -295,6 +295,51 @@ $alarmsData = getActiveAlarmsData($conn);
             margin-bottom: 12px;
         }
         
+        .alarm-info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 10px;
+            margin-bottom: 15px;
+            padding: 15px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 8px;
+        }
+        
+        .info-item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        
+        .info-label {
+            font-size: 12px;
+            color: var(--text-light);
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .info-value {
+            font-size: 14px;
+            color: var(--text);
+        }
+        
+        .alarm-additional-info {
+            background: rgba(255,255,255,0.05);
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            font-size: 13px;
+            color: var(--text-light);
+        }
+        
+        .alarm-additional-info div {
+            margin-bottom: 5px;
+        }
+        
+        .alarm-additional-info div:last-child {
+            margin-bottom: 0;
+        }
+        
         .alarm-message {
             color: var(--text);
             margin-bottom: 15px;
@@ -467,33 +512,33 @@ $alarmsData = getActiveAlarmsData($conn);
         
         <div class="stats-bar">
             <div class="stat-card critical">
-                <div class="label">Critical</div>
+                <div class="label">Kritik</div>
                 <div class="value" id="criticalCount">0</div>
             </div>
             <div class="stat-card high">
-                <div class="label">High</div>
+                <div class="label">Yüksek</div>
                 <div class="value" id="highCount">0</div>
             </div>
             <div class="stat-card medium">
-                <div class="label">Medium</div>
+                <div class="label">Orta</div>
                 <div class="value" id="mediumCount">0</div>
             </div>
             <div class="stat-card info">
-                <div class="label">Total Active</div>
+                <div class="label">Toplam Aktif</div>
                 <div class="value" id="totalCount">0</div>
             </div>
         </div>
         
         <div class="toolbar">
             <div class="filter-group">
-                <span style="color: var(--text-light); font-size: 14px;">Filter:</span>
-                <button class="filter-btn active" onclick="filterAlarms('all')">All</button>
-                <button class="filter-btn" onclick="filterAlarms('critical')">Critical</button>
-                <button class="filter-btn" onclick="filterAlarms('high')">High</button>
-                <button class="filter-btn" onclick="filterAlarms('medium')">Medium</button>
+                <span style="color: var(--text-light); font-size: 14px;">Filtre:</span>
+                <button class="filter-btn active" onclick="filterAlarms('all')">Tümü</button>
+                <button class="filter-btn" onclick="filterAlarms('critical')">Kritik</button>
+                <button class="filter-btn" onclick="filterAlarms('high')">Yüksek</button>
+                <button class="filter-btn" onclick="filterAlarms('medium')">Orta</button>
             </div>
             <button class="refresh-btn" onclick="refreshPage()">
-                <i class="fas fa-sync-alt"></i> Refresh
+                <i class="fas fa-sync-alt"></i> Yenile
             </button>
         </div>
         
@@ -506,23 +551,23 @@ $alarmsData = getActiveAlarmsData($conn);
     <div class="modal-overlay" id="ackModal">
         <div class="modal">
             <div class="modal-header">
-                <h3 class="modal-title">Acknowledge Alarm</h3>
+                <h3 class="modal-title">Alarm Bilgi Dahilinde Kapat</h3>
             </div>
             <div class="form-group">
-                <label>Acknowledgment Type:</label>
+                <label>Onay Türü:</label>
                 <select id="ackType">
-                    <option value="acknowledged">Acknowledged</option>
-                    <option value="resolved">Resolved</option>
-                    <option value="false_positive">False Positive</option>
+                    <option value="acknowledged">Bilgi Dahilinde</option>
+                    <option value="resolved">Çözüldü</option>
+                    <option value="false_positive">Yanlış Alarm</option>
                 </select>
             </div>
             <div class="form-group">
-                <label>Notes (Optional):</label>
-                <textarea id="ackNotes" rows="3" placeholder="Add any notes..."></textarea>
+                <label>Notlar (İsteğe Bağlı):</label>
+                <textarea id="ackNotes" rows="3" placeholder="Not ekleyin..."></textarea>
             </div>
             <div class="modal-actions">
-                <button class="btn btn-secondary" onclick="closeAckModal()">Cancel</button>
-                <button class="btn btn-primary" onclick="submitAcknowledge()">Submit</button>
+                <button class="btn btn-secondary" onclick="closeAckModal()">İptal</button>
+                <button class="btn btn-primary" onclick="submitAcknowledge()">Onayla</button>
             </div>
         </div>
     </div>
@@ -531,21 +576,21 @@ $alarmsData = getActiveAlarmsData($conn);
     <div class="modal-overlay" id="silenceModal">
         <div class="modal">
             <div class="modal-header">
-                <h3 class="modal-title">Silence Alarm</h3>
+                <h3 class="modal-title">Alarmı Sesize Al</h3>
             </div>
             <div class="form-group">
-                <label>Silence Duration:</label>
+                <label>Sessize Alma Süresi:</label>
                 <select id="silenceDuration">
-                    <option value="30">30 minutes</option>
-                    <option value="60">1 hour</option>
-                    <option value="180">3 hours</option>
-                    <option value="360">6 hours</option>
-                    <option value="1440">24 hours</option>
+                    <option value="30">30 dakika</option>
+                    <option value="60">1 saat</option>
+                    <option value="180">3 saat</option>
+                    <option value="360">6 saat</option>
+                    <option value="1440">24 saat</option>
                 </select>
             </div>
             <div class="modal-actions">
-                <button class="btn btn-secondary" onclick="closeSilenceModal()">Cancel</button>
-                <button class="btn btn-primary" onclick="submitSilence()">Silence</button>
+                <button class="btn btn-secondary" onclick="closeSilenceModal()">İptal</button>
+                <button class="btn btn-primary" onclick="submitSilence()">Sesize Al</button>
             </div>
         </div>
     </div>
@@ -581,8 +626,8 @@ $alarmsData = getActiveAlarmsData($conn);
                 container.innerHTML = `
                     <div class="empty-state">
                         <i class="fas fa-check-circle"></i>
-                        <h3>No Active Alarms</h3>
-                        <p>All systems are running normally</p>
+                        <h3>Aktif Alarm Yok</h3>
+                        <p>Tüm sistemler normal çalışıyor</p>
                     </div>
                 `;
                 return;
@@ -592,40 +637,58 @@ $alarmsData = getActiveAlarmsData($conn);
             filtered.forEach(alarm => {
                 const severityClass = alarm.severity.toLowerCase();
                 const silencedClass = alarm.is_silenced ? 'silenced' : '';
-                const silencedBadge = alarm.is_silenced ? '<span style="background: var(--text-light); color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px; margin-left: 10px;">SILENCED</span>' : '';
+                const silencedBadge = alarm.is_silenced ? '<span style="background: var(--text-light); color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px; margin-left: 10px;">SESSİZDE</span>' : '';
+                
+                // Get Turkish alarm type name
+                const alarmTypeTurkish = getAlarmTypeTurkish(alarm.alarm_type);
                 
                 html += `
                     <div class="alarm-card ${severityClass} ${silencedClass}">
                         <div class="alarm-header">
-                            <div>
-                                <div class="alarm-title">${escapeHtml(alarm.title)}</div>
-                                <div class="alarm-info">
-                                    <i class="fas fa-network-wired"></i> ${escapeHtml(alarm.device_name || 'Unknown Device')}
-                                    ${alarm.port_number ? ` - Port ${alarm.port_number}` : ''}
-                                    ${alarm.device_ip ? ` (${alarm.device_ip})` : ''}
-                                </div>
+                            <div style="flex: 1;">
+                                <div class="alarm-title">${escapeHtml(alarm.device_name || 'Bilinmeyen Cihaz')} - Port ${alarm.port_number || 'N/A'}</div>
                             </div>
                             <span class="alarm-severity ${severityClass}">${alarm.severity}${silencedBadge}</span>
+                        </div>
+                        
+                        <div class="alarm-info-grid">
+                            <div class="info-item">
+                                <span class="info-label">Alarm Türü:</span>
+                                <span class="info-value">${alarmTypeTurkish}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Switch IP:</span>
+                                <span class="info-value">${alarm.device_ip || 'N/A'}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">İlk Görülme:</span>
+                                <span class="info-value">${formatDateFull(alarm.first_occurrence)}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Son Görülme:</span>
+                                <span class="info-value">${formatDateFull(alarm.last_occurrence)}</span>
+                            </div>
                         </div>
                         
                         <div class="alarm-message">${escapeHtml(alarm.message)}</div>
                         
                         ${alarm.details ? `<div class="alarm-details">${escapeHtml(alarm.details)}</div>` : ''}
                         
-                        <div class="alarm-meta">
-                            <span><i class="fas fa-clock"></i> First: ${formatDate(alarm.first_occurrence)}</span>
-                            <span><i class="fas fa-redo"></i> Last: ${formatDate(alarm.last_occurrence)}</span>
-                            ${alarm.occurrence_count > 1 ? `<span><i class="fas fa-repeat"></i> Count: ${alarm.occurrence_count}</span>` : ''}
-                            ${alarm.mac_address ? `<span><i class="fas fa-ethernet"></i> MAC: ${alarm.mac_address}</span>` : ''}
-                        </div>
+                        ${alarm.mac_address || alarm.old_value || alarm.new_value ? `
+                            <div class="alarm-additional-info">
+                                ${alarm.mac_address ? `<div><strong>MAC Address:</strong> ${alarm.mac_address}</div>` : ''}
+                                ${alarm.old_value ? `<div><strong>Eski Değer:</strong> ${alarm.old_value}</div>` : ''}
+                                ${alarm.new_value ? `<div><strong>Yeni Değer:</strong> ${alarm.new_value}</div>` : ''}
+                            </div>
+                        ` : ''}
                         
                         <div class="alarm-actions">
                             <button class="btn btn-primary" onclick="openAckModal(${alarm.id})">
-                                <i class="fas fa-check"></i> Acknowledge
+                                <i class="fas fa-check"></i> Bilgi Dahilinde Kapat
                             </button>
                             ${!alarm.is_silenced ? `
                                 <button class="btn btn-secondary" onclick="openSilenceModal(${alarm.id})">
-                                    <i class="fas fa-bell-slash"></i> Silence
+                                    <i class="fas fa-bell-slash"></i> Alarmı Sesize Al
                                 </button>
                             ` : ''}
                             ${alarm.port_number ? `
@@ -639,6 +702,31 @@ $alarmsData = getActiveAlarmsData($conn);
             });
             
             container.innerHTML = html;
+        }
+        
+        function getAlarmTypeTurkish(alarmType) {
+            const types = {
+                'mac_moved': 'MAC Taşındı',
+                'mac_added': 'MAC Eklendi',
+                'vlan_changed': 'VLAN Değişti',
+                'description_changed': 'Açıklama Değişti',
+                'port_up': 'Port Açıldı',
+                'port_down': 'Port Kapandı'
+            };
+            return types[alarmType] || alarmType;
+        }
+        
+        function formatDateFull(dateString) {
+            if (!dateString) return 'N/A';
+            const date = new Date(dateString);
+            return date.toLocaleString('tr-TR', { 
+                year: 'numeric', 
+                month: '2-digit', 
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
         }
         
         function updateStats(alarms) {
@@ -710,13 +798,13 @@ $alarmsData = getActiveAlarmsData($conn);
                 const data = await response.json();
                 
                 if (data.success) {
-                    alert('Alarm acknowledged successfully');
+                    alert('Alarm başarıyla kapatıldı');
                     location.reload();
                 } else {
-                    alert('Error: ' + (data.error || 'Unknown error'));
+                    alert('Hata: ' + (data.error || 'Bilinmeyen hata'));
                 }
             } catch (error) {
-                alert('Error: ' + error.message);
+                alert('Hata: ' + error.message);
             }
             
             closeAckModal();
@@ -739,20 +827,20 @@ $alarmsData = getActiveAlarmsData($conn);
                 const data = await response.json();
                 
                 if (data.success) {
-                    alert('Alarm silenced successfully');
+                    alert('Alarm başarıyla sesize alındı');
                     location.reload();
                 } else {
-                    alert('Error: ' + (data.error || 'Unknown error'));
+                    alert('Hata: ' + (data.error || 'Bilinmeyen hata'));
                 }
             } catch (error) {
-                alert('Error: ' + error.message);
+                alert('Hata: ' + error.message);
             }
             
             closeSilenceModal();
         }
         
         function viewPort(deviceName, portNumber) {
-            alert('View Port feature - Device: ' + deviceName + ', Port: ' + portNumber);
+            alert('Port Görüntüleme - Cihaz: ' + deviceName + ', Port: ' + portNumber);
             // This would typically open a detailed port view
         }
         
