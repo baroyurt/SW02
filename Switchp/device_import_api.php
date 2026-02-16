@@ -535,13 +535,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_FILES['excel_file'])) {
                 // Normalize MAC for comparison (remove colons, lowercase)
                 $macNormalized = strtolower(str_replace(':', '', $mac));
                 
-                // Update port connections where MAC matches
-                // Join with snmp_ports to get MAC, update port_connections
+                // Update snmp_ports table directly (port_connections table doesn't exist)
+                // Append IP and hostname to port description
                 $updateStmt = $conn->prepare("
-                    UPDATE port_connections pc
-                    INNER JOIN snmp_ports sp ON pc.port_id = sp.id
-                    SET pc.ip = ?, pc.connection_info = ?
-                    WHERE LOWER(REPLACE(sp.mac, ':', '')) = ?
+                    UPDATE snmp_ports 
+                    SET port_description = CONCAT(
+                        COALESCE(port_description, ''),
+                        ' [IP: ', ?, ']',
+                        ' [Device: ', ?, ']'
+                    )
+                    WHERE LOWER(REPLACE(mac, ':', '')) = ?
+                    AND mac IS NOT NULL 
+                    AND mac != ''
                 ");
                 
                 if ($updateStmt) {
@@ -557,7 +562,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_FILES['excel_file'])) {
             echo json_encode([
                 'success' => true,
                 'updated_count' => $updated_count,
-                'message' => "$updated_count port connections updated"
+                'message' => "$updated_count port description(s) updated with Device Import data"
             ]);
         } catch (Exception $e) {
             echo json_encode(['success' => false, 'error' => $e->getMessage()]);
