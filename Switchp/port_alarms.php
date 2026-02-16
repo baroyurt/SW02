@@ -442,57 +442,57 @@ $pageTitle = "Port Change Alarms";
     <div class="container">
         <div class="header">
             <div>
-                <h1><i class="fas fa-bell"></i> Port Change Alarms</h1>
-                <p>Real-time monitoring of MAC movements, VLAN changes, and port configuration updates</p>
+                <h1><i class="fas fa-bell"></i> Port Değişiklik Alarmları</h1>
+                <p>MAC hareketleri, VLAN değişiklikleri ve port yapılandırma güncellemelerinin gerçek zamanlı izlenmesi</p>
                 <div class="auto-refresh">
                     <input type="checkbox" id="autoRefresh" checked>
-                    <label for="autoRefresh">Auto-refresh every 30 seconds</label>
+                    <label for="autoRefresh">Her 30 saniyede otomatik yenile</label>
                 </div>
             </div>
             <div class="header-actions">
                 <a href="index.php" class="btn btn-secondary">
-                    <i class="fas fa-arrow-left"></i> Back to Dashboard
+                    <i class="fas fa-arrow-left"></i> Ana Sayfaya Dön
                 </a>
                 <a href="logout.php" class="btn btn-secondary">
-                    <i class="fas fa-sign-out-alt"></i> Logout
+                    <i class="fas fa-sign-out-alt"></i> Çıkış
                 </a>
             </div>
         </div>
         
         <div class="stats-bar" id="statsBar">
             <div class="stat-card critical">
-                <div><i class="fas fa-exclamation-circle"></i> Critical</div>
+                <div><i class="fas fa-exclamation-circle"></i> Kritik</div>
                 <div class="value" id="criticalCount">0</div>
             </div>
             <div class="stat-card high">
-                <div><i class="fas fa-exclamation-triangle"></i> High</div>
+                <div><i class="fas fa-exclamation-triangle"></i> Yüksek</div>
                 <div class="value" id="highCount">0</div>
             </div>
             <div class="stat-card medium">
-                <div><i class="fas fa-info-circle"></i> Medium</div>
+                <div><i class="fas fa-info-circle"></i> Orta</div>
                 <div class="value" id="mediumCount">0</div>
             </div>
             <div class="stat-card info">
-                <div><i class="fas fa-check-circle"></i> Total Active</div>
+                <div><i class="fas fa-check-circle"></i> Toplam Aktif</div>
                 <div class="value" id="totalCount">0</div>
             </div>
         </div>
         
         <div class="alarms-container">
-            <h2 style="margin-bottom: 15px;"><i class="fas fa-list"></i> Active Alarms</h2>
+            <h2 style="margin-bottom: 15px;"><i class="fas fa-list"></i> Aktif Alarmlar</h2>
             
             <div class="filter-bar">
-                <button class="filter-btn active" data-filter="all">All</button>
-                <button class="filter-btn" data-filter="mac_moved">MAC Moved</button>
-                <button class="filter-btn" data-filter="vlan_changed">VLAN Changed</button>
-                <button class="filter-btn" data-filter="description_changed">Description Changed</button>
-                <button class="filter-btn" style="border-color: #999; color: #999;" data-filter="silenced">Silenced</button>
+                <button class="filter-btn active" data-filter="all">Tümü</button>
+                <button class="filter-btn" data-filter="mac_moved">MAC Taşındı</button>
+                <button class="filter-btn" data-filter="vlan_changed">VLAN Değişti</button>
+                <button class="filter-btn" data-filter="description_changed">Açıklama Değişti</button>
+                <button class="filter-btn" style="border-color: #999; color: #999;" data-filter="silenced">Sessize Alınmış</button>
             </div>
             
             <div id="alarmsContainer">
                 <div class="loading">
                     <div class="spinner"></div>
-                    <p>Loading alarms...</p>
+                    <p>Alarmlar yükleniyor...</p>
                 </div>
             </div>
         </div>
@@ -592,10 +592,10 @@ $pageTitle = "Port Change Alarms";
                     displayAlarms(data.alarms);
                     updateStats(data.alarms);
                 } else {
-                    showError('Failed to load alarms: ' + (data.error || 'Unknown error'));
+                    showError('Alarmlar yüklenemedi: ' + (data.error || 'Bilinmeyen hata'));
                 }
             } catch (error) {
-                showError('Error loading alarms: ' + error.message);
+                showError('Alarm yükleme hatası: ' + error.message);
             }
         }
         
@@ -617,8 +617,8 @@ $pageTitle = "Port Change Alarms";
                 container.innerHTML = `
                     <div class="no-alarms">
                         <i class="fas fa-check-circle"></i>
-                        <h3>No Active Alarms</h3>
-                        <p>All systems are operating normally</p>
+                        <h3>Aktif Alarm Yok</h3>
+                        <p>Tüm sistemler normal çalışıyor</p>
                     </div>
                 `;
                 return;
@@ -641,7 +641,7 @@ $pageTitle = "Port Change Alarms";
                         
                         <div class="alarm-details">
                             <div class="detail-item">
-                                <div class="detail-label">Alarm Type</div>
+                                <div class="detail-label">Alarm Tipi</div>
                                 <div class="detail-value">${formatAlarmType(alarm.alarm_type)}</div>
                             </div>
                             <div class="detail-item">
@@ -649,11 +649,11 @@ $pageTitle = "Port Change Alarms";
                                 <div class="detail-value">${alarm.device_ip}</div>
                             </div>
                             <div class="detail-item">
-                                <div class="detail-label">First Occurrence</div>
+                                <div class="detail-label">İlk Görülme</div>
                                 <div class="detail-value">${formatDateTime(alarm.first_occurrence)}</div>
                             </div>
                             <div class="detail-item">
-                                <div class="detail-label">Last Occurrence</div>
+                                <div class="detail-label">Son Görülme</div>
                                 <div class="detail-value">${formatDateTime(alarm.last_occurrence)}</div>
                             </div>
                         </div>
@@ -665,7 +665,7 @@ $pageTitle = "Port Change Alarms";
                         
                         ${alarm.mac_address ? `
                             <div style="margin: 10px 0;">
-                                <strong>MAC Address:</strong> <span class="mac-highlight">${alarm.mac_address}</span>
+                                <strong>MAC Adresi:</strong> <span class="mac-highlight">${alarm.mac_address}</span>
                             </div>
                         ` : ''}
                         
@@ -679,13 +679,13 @@ $pageTitle = "Port Change Alarms";
                         
                         ${isSilenced ? `
                             <div style="padding: 10px; background: #fff3cd; border-radius: 5px; margin: 10px 0;">
-                                <i class="fas fa-volume-mute"></i> <strong>Silenced until:</strong> ${formatDateTime(alarm.silence_until)}
+                                <i class="fas fa-volume-mute"></i> <strong>Sessize alınma süresi:</strong> ${formatDateTime(alarm.silence_until)}
                             </div>
                         ` : ''}
                         
                         ${alarm.acknowledged_at ? `
                             <div style="padding: 10px; background: #d4edda; border-radius: 5px; margin: 10px 0;">
-                                <i class="fas fa-check"></i> <strong>Acknowledged by:</strong> ${alarm.acknowledged_by} on ${formatDateTime(alarm.acknowledged_at)}
+                                <i class="fas fa-check"></i> <strong>Onaylayan:</strong> ${alarm.acknowledged_by} - ${formatDateTime(alarm.acknowledged_at)}
                             </div>
                         ` : ''}
                         
@@ -726,12 +726,12 @@ $pageTitle = "Port Change Alarms";
         
         function formatAlarmType(type) {
             const types = {
-                'mac_moved': 'MAC Moved',
-                'mac_added': 'MAC Added',
-                'vlan_changed': 'VLAN Changed',
-                'description_changed': 'Description Changed',
-                'port_down': 'Port Down',
-                'device_unreachable': 'Device Unreachable'
+                'mac_moved': 'MAC Taşındı',
+                'mac_added': 'MAC Eklendi',
+                'vlan_changed': 'VLAN Değişti',
+                'description_changed': 'Açıklama Değişti',
+                'port_down': 'Port Kapandı',
+                'device_unreachable': 'Cihaza Erişilemiyor'
             };
             return types[type] || type;
         }
@@ -739,7 +739,7 @@ $pageTitle = "Port Change Alarms";
         function formatDateTime(dateStr) {
             if (!dateStr) return 'N/A';
             const date = new Date(dateStr);
-            return date.toLocaleString('en-US');
+            return date.toLocaleString('tr-TR');
         }
         
         function showAcknowledgeModal(alarmId) {
@@ -784,10 +784,10 @@ $pageTitle = "Port Change Alarms";
                     document.getElementById('ackNote').value = '';
                     loadAlarms();
                 } else {
-                    alert('Error: ' + (data.error || 'Failed to acknowledge alarm'));
+                    alert('Hata: ' + (data.error || 'Alarm onaylanamadı'));
                 }
             } catch (error) {
-                alert('Error: ' + error.message);
+                alert('Hata: ' + error.message);
             }
         }
         
@@ -811,10 +811,10 @@ $pageTitle = "Port Change Alarms";
                     closeModal('silenceModal');
                     loadAlarms();
                 } else {
-                    alert('Error: ' + (data.error || 'Failed to silence alarm'));
+                    alert('Hata: ' + (data.error || 'Alarm sessize alınamadı'));
                 }
             } catch (error) {
-                alert('Error: ' + error.message);
+                alert('Hata: ' + error.message);
             }
         }
         
@@ -840,10 +840,10 @@ $pageTitle = "Port Change Alarms";
             document.getElementById('alarmsContainer').innerHTML = `
                 <div style="text-align: center; padding: 40px; color: #dc3545;">
                     <i class="fas fa-exclamation-triangle" style="font-size: 48px; margin-bottom: 20px;"></i>
-                    <h3>Error</h3>
+                    <h3>Hata</h3>
                     <p>${message}</p>
                     <button class="btn btn-details" onclick="loadAlarms()" style="margin-top: 20px;">
-                        <i class="fas fa-redo"></i> Retry
+                        <i class="fas fa-redo"></i> Tekrar Dene
                     </button>
                 </div>
             `;
