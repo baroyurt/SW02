@@ -1,4 +1,13 @@
-<!DOCTYPE html>
+<?php
+// Require authentication
+require_once 'db.php';
+require_once 'auth.php';
+
+$auth = new Auth($conn);
+$auth->requireLogin();
+
+$currentUser = $auth->getUser();
+?>
 <html lang="tr">
 <head>
     <meta charset="UTF-8">

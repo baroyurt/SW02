@@ -1520,7 +1520,7 @@ if (!$config) {
             statusDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Test mesajı gönderiliyor...';
             
             // Use server-side endpoint to avoid CORS issues
-            fetch('snmp_admin.php', {
+            fetch('admin.php', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded'
@@ -1636,7 +1636,7 @@ if (!$config) {
             formData.append('action', 'delete_switch');
             formData.append('index', index);
             
-            fetch('snmp_admin.php', {
+            fetch('admin.php', {
                 method: 'POST',
                 body: formData
             })
@@ -1671,7 +1671,7 @@ if (!$config) {
         
         // Reload config
         function reloadConfig() {
-            fetch('snmp_admin.php?action=get_config', {
+            fetch('admin.php?action=get_config', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
@@ -1706,7 +1706,7 @@ if (!$config) {
             formData.set('action', index !== '' ? 'update_switch' : 'add_switch');
             formData.set('enabled', document.getElementById('switch_enabled').checked ? 'true' : 'false');
             
-            fetch('snmp_admin.php', {
+            fetch('admin.php', {
                 method: 'POST',
                 body: formData
             })
@@ -1729,7 +1729,7 @@ if (!$config) {
             formData.set('action', 'update_telegram');
             formData.set('enabled', document.getElementById('telegram_enabled').checked ? 'true' : 'false');
             
-            fetch('snmp_admin.php', {
+            fetch('admin.php', {
                 method: 'POST',
                 body: formData
             })
@@ -1761,7 +1761,7 @@ if (!$config) {
                 formData.append('to_addresses[]', email);
             });
             
-            fetch('snmp_admin.php', {
+            fetch('admin.php', {
                 method: 'POST',
                 body: formData
             })
@@ -1782,7 +1782,7 @@ if (!$config) {
             const formData = new FormData(this);
             formData.set('action', 'update_snmp');
             
-            fetch('snmp_admin.php', {
+            fetch('admin.php', {
                 method: 'POST',
                 body: formData
             })
@@ -1805,7 +1805,7 @@ if (!$config) {
             const formData = new FormData();
             formData.append('action', 'get_db_switches');
             
-            fetch('snmp_admin.php', {
+            fetch('admin.php', {
                 method: 'POST',
                 body: formData
             })
@@ -1892,7 +1892,7 @@ if (!$config) {
             formData.append('action', 'import_from_db');
             formData.append('switch_id', switchId);
             
-            fetch('snmp_admin.php', {
+            fetch('admin.php', {
                 method: 'POST',
                 body: formData
             })
@@ -1917,7 +1917,7 @@ if (!$config) {
             const formData = new FormData();
             formData.append('action', 'import_all_from_db');
             
-            fetch('snmp_admin.php', {
+            fetch('admin.php', {
                 method: 'POST',
                 body: formData
             })
@@ -1943,7 +1943,7 @@ if (!$config) {
         
         // Load alarm severity configuration
         function loadAlarmSeverities() {
-            fetch('snmp_admin.php', {
+            fetch('admin.php', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded'
@@ -2048,7 +2048,7 @@ if (!$config) {
             const telegramEnabled = document.getElementById(`telegram_${alarmType}`).checked;
             const emailEnabled = document.getElementById(`email_${alarmType}`).checked;
             
-            fetch('snmp_admin.php', {
+            fetch('admin.php', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded'

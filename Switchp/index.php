@@ -1558,47 +1558,15 @@ header("Expires: 0");
                 <span>Port Değişiklik Alarmları</span>
                 <span id="alarm-badge" class="alarm-badge" style="display: none;">0</span>
             </button>
-        </div>
-        
-        <div class="nav-section">
-            <div class="nav-title">Yönetim</div>
-            <button class="nav-item" id="nav-add-switch">
-                <i class="fas fa-plus-circle"></i>
-                <span>Yeni Switch</span>
-            </button>
-            <button class="nav-item" id="nav-add-rack">
-                <i class="fas fa-cube"></i>
-                <span>Yeni Rack</span>
-            </button>
-            <button class="nav-item" id="nav-add-panel">
-                <i class="fas fa-th-large"></i>
-                <span>Yeni Patch Panel</span>
-            </button>
-            <button class="nav-item" id="nav-backup">
-                <i class="fas fa-database"></i>
-                <span>Yedekleme</span>
+            <button class="nav-item" data-page="device-import">
+                <i class="fas fa-file-import"></i>
+                <span>Device Import</span>
             </button>
         </div>
         
         <div class="nav-section">
-            <div class="nav-title">Veri İşlemleri</div>
-            <button class="nav-item" id="nav-export">
-                <i class="fas fa-file-export"></i>
-                <span>Excel Export</span>
-            </button>
-            <button class="nav-item" id="nav-history">
-                <i class="fas fa-history"></i>
-                <span>Geçmiş Yedekler</span>
-            </button>
-        </div>
-        
-        <div class="nav-section">
-            <div class="nav-title">SNMP Veri Senkronizasyonu</div>
-            <button class="nav-item" id="nav-snmp-sync">
-                <i class="fas fa-sync-alt"></i>
-                <span>SNMP Verilerini Görüntüle</span>
-            </button>
-            <button class="nav-item" id="nav-snmp-admin" onclick="window.open('snmp_admin.php', '_blank')" style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3);">
+            <div class="nav-title">SNMP Admin</div>
+            <button class="nav-item" id="nav-snmp-admin" onclick="window.open('admin.php', '_blank')" style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3);">
                 <i class="fas fa-cogs"></i>
                 <span>SNMP Admin Panel</span>
             </button>
@@ -1619,28 +1587,6 @@ header("Expires: 0");
                 <i class="fas fa-sign-out-alt"></i>
                 <span>Çıkış Yap</span>
             </button>
-        </div>
-        
-        <div class="nav-section">
-            <div class="nav-title">İstatistikler</div>
-            <div style="padding: 15px; background: rgba(15, 23, 42, 0.5); border-radius: 10px; margin-bottom: 10px;">
-                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                    <span style="color: var(--text-light);">Toplam Switch:</span>
-                    <span style="color: var(--text);" id="sidebar-total-switches">0</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                    <span style="color: var(--text-light);">Aktif Port:</span>
-                    <span style="color: var(--text);" id="sidebar-active-ports">0</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                    <span style="color: var(--text-light);">Patch Panel:</span>
-                    <span style="color: var(--text);" id="sidebar-total-panels">0</span>
-                </div>
-                <div style="display: flex; justify-content: space-between;">
-                    <span style="color: var(--text-light);">Son Yedek:</span>
-                    <span style="color: var(--text);" id="sidebar-last-backup">-</span>
-                </div>
-            </div>
         </div>
     </div>
     
@@ -1810,7 +1756,40 @@ header("Expires: 0");
             </div>
             
             <!-- Port Alarms Component -->
-            <?php include 'port_alarms_component.php'; ?>
+            <!-- Security Note: allow-same-origin + allow-scripts is intentional and safe here because:
+                 1. iframe loads our own PHP file (port_alarms.php), not external content
+                 2. Content is server-side rendered and authenticated
+                 3. No user-generated HTML/JavaScript
+                 4. Required for API calls and session management -->
+            <iframe src="port_alarms.php" 
+                    sandbox="allow-scripts allow-same-origin allow-forms allow-downloads allow-modals"
+                    style="width: 100%; height: calc(100vh - 150px); border: none; border-radius: 15px; background: var(--dark);"
+                    onload="this.style.display='block'"
+                    onerror="this.innerHTML='<div style=padding:20px;text-align:center;color:red;>Error loading port alarms page</div>'">
+            </iframe>
+        </div>
+        
+        <!-- Device Import Page -->
+        <div class="page-content" id="page-device-import">
+            <div class="top-bar">
+                <div class="page-title">
+                    <i class="fas fa-file-import"></i>
+                    <span>Device Import - MAC Address Registry</span>
+                </div>
+            </div>
+            
+            <!-- Device Import Component -->
+            <!-- Security Note: allow-same-origin + allow-scripts is intentional and safe here because:
+                 1. iframe loads our own PHP file (device_import.php), not external content
+                 2. Content is server-side rendered and authenticated
+                 3. No user-generated HTML/JavaScript
+                 4. Required for API calls and session management -->
+            <iframe src="device_import.php" 
+                    sandbox="allow-scripts allow-same-origin allow-forms allow-downloads allow-modals"
+                    style="width: 100%; height: calc(100vh - 150px); border: none; border-radius: 15px; background: var(--dark);"
+                    onload="this.style.display='block'"
+                    onerror="this.innerHTML='<div style=padding:20px;text-align:center;color:red;>Error loading device import page</div>'">
+            </iframe>
         </div>
     </div>
     
@@ -2108,68 +2087,6 @@ header("Expires: 0");
     </div>
     
     <!-- SNMP Data Viewer Modal -->
-    <div class="modal-overlay" id="snmp-modal">
-        <div class="modal" style="max-width: 1200px;">
-            <div class="modal-header">
-                <h3 class="modal-title">SNMP Worker Verileri</h3>
-                <button class="modal-close" id="close-snmp-modal">&times;</button>
-            </div>
-            
-            <div class="tabs">
-                <button class="tab-btn active" data-snmp-tab="devices">Cihazlar</button>
-                <button class="tab-btn" data-snmp-tab="alarms">Alarmlar</button>
-                <button class="tab-btn" data-snmp-tab="sync">Senkronizasyon</button>
-            </div>
-            
-            <div id="snmp-content">
-                <!-- Content will be loaded dynamically -->
-                <div id="snmp-tab-devices" class="tab-content active">
-                    <div style="margin-bottom: 20px;">
-                        <button class="btn btn-primary" onclick="loadSNMPDevices()">
-                            <i class="fas fa-sync"></i> Yenile
-                        </button>
-                    </div>
-                    <div id="snmp-devices-list" style="overflow-x: auto;">
-                        <p style="text-align: center; padding: 40px; color: var(--text-light);">
-                            <i class="fas fa-spinner fa-spin" style="font-size: 2rem;"></i><br><br>
-                            Yükleniyor...
-                        </p>
-                    </div>
-                </div>
-                
-                <div id="snmp-tab-alarms" class="tab-content">
-                    <div style="margin-bottom: 20px;">
-                        <button class="btn btn-primary" onclick="loadSNMPAlarms()">
-                            <i class="fas fa-sync"></i> Yenile
-                        </button>
-                    </div>
-                    <div id="snmp-alarms-list">
-                        <p style="text-align: center; padding: 40px; color: var(--text-light);">
-                            Alarmlar yüklenecek...
-                        </p>
-                    </div>
-                </div>
-                
-                <div id="snmp-tab-sync" class="tab-content">
-                    <div style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 10px; padding: 20px; margin-bottom: 20px;">
-                        <h4 style="color: var(--primary); margin-bottom: 10px;">
-                            <i class="fas fa-info-circle"></i> Senkronizasyon Hakkında
-                        </h4>
-                        <p style="color: var(--text-light); line-height: 1.6;">
-                            Bu işlem, SNMP Worker tarafından toplanan verileri ana switch veritabanına aktarır. 
-                            Mevcut switch'ler güncellenir, yeni cihazlar eklenir.
-                        </p>
-                    </div>
-                    
-                    <button class="btn btn-success" onclick="syncSNMPToSwitches()" style="width: 100%; padding: 15px; font-size: 1.1rem;">
-                        <i class="fas fa-sync-alt"></i> SNMP Verilerini Senkronize Et
-                    </button>
-                    
-                    <div id="sync-result" style="margin-top: 20px;"></div>
-                </div>
-            </div>
-        </div>
-    </div>
     
     <!-- Backup/Restore Modal -->
     <div class="modal-overlay" id="backup-modal">
@@ -2280,15 +2197,30 @@ header("Expires: 0");
                         <label class="form-label">Bağlantı Türü</label>
                         <select id="port-type" class="form-control">
                             <option value="BOŞ">BOŞ</option>
-                            <option value="AP">AP</option>
-                            <option value="IPTV">IPTV</option>
-                            <option value="DEVICE">DEVICE</option>
-                            <option value="OTOMASYON">OTOMASYON</option>
-                            <option value="FIBER">FIBER</option>
-                            <option value="SANTRAL">SANTRAL</option>
-                            <option value="SERVER">SERVER</option>
-                            <option value="ETHERNET">ETHERNET</option>
-                            <option value="HUB">HUB</option>
+                            <optgroup label="Device Types">
+                                <option value="AP">AP</option>
+                                <option value="IPTV">IPTV</option>
+                                <option value="DEVICE">DEVICE</option>
+                                <option value="OTOMASYON">OTOMASYON</option>
+                                <option value="FIBER">FIBER</option>
+                                <option value="SANTRAL">SANTRAL</option>
+                                <option value="SERVER">SERVER</option>
+                                <option value="ETHERNET">ETHERNET</option>
+                                <option value="HUB">HUB</option>
+                            </optgroup>
+                            <optgroup label="VLANs">
+                                <option value="VLAN 1">VLAN 1 - Default</option>
+                                <option value="VLAN 10">VLAN 10 - Management</option>
+                                <option value="VLAN 20">VLAN 20 - Users</option>
+                                <option value="VLAN 30">VLAN 30 - Guests</option>
+                                <option value="VLAN 40">VLAN 40 - IoT</option>
+                                <option value="VLAN 50">VLAN 50 - Voice</option>
+                                <option value="VLAN 60">VLAN 60 - Servers</option>
+                                <option value="VLAN 70">VLAN 70 - DMZ</option>
+                                <option value="VLAN 80">VLAN 80 - Security</option>
+                                <option value="VLAN 90">VLAN 90 - IPTV</option>
+                                <option value="VLAN 100">VLAN 100 - Printers</option>
+                            </optgroup>
                         </select>
                     </div>
                 </div>
@@ -4269,6 +4201,14 @@ function confirmDeleteRack(rackId) {
             // Panel tipi değişim eventi
             setupPanelTypeChangeEvent(sw.rack_id, isFiberPort);
             
+            // Device Import lookup - MAC adresi değiştiğinde otomatik doldur
+            setupDeviceImportLookup();
+            
+            // Mevcut MAC varsa ve device import kaydı varsa lookup yap
+            if (existingConnection && existingConnection.mac) {
+                lookupDeviceByMac(existingConnection.mac);
+            }
+            
             modal.classList.add('active');
         }
 
@@ -4315,6 +4255,128 @@ function confirmDeleteRack(rackId) {
                     portInput.disabled = true;
                 }
             });
+        }
+
+        // Device Import Lookup - MAC adresine göre cihaz bilgilerini otomatik doldur
+        function setupDeviceImportLookup() {
+            const macInput = document.getElementById('port-mac');
+            
+            if (!macInput) return;
+            
+            // Önceki event listener'ları temizle
+            const newMacInput = macInput.cloneNode(true);
+            macInput.parentNode.replaceChild(newMacInput, macInput);
+            
+            // Yeni event listener ekle
+            document.getElementById('port-mac').addEventListener('blur', function() {
+                const mac = this.value.trim();
+                if (mac && mac.length >= 12) {
+                    lookupDeviceByMac(mac);
+                }
+            });
+        }
+
+        // MAC adresine göre Device Import registry'den cihaz bilgilerini al
+        // Auto-save helper function
+        function autoFillField(input, value) {
+            if (value && (!input.value || input.value.trim() === '')) {
+                input.value = value;
+                // Görsel feedback
+                input.style.backgroundColor = '#dcfce7'; // Açık yeşil
+                setTimeout(() => {
+                    input.style.backgroundColor = '';
+                }, 2000);
+                return true; // Field was filled
+            }
+            return false; // Field was not filled
+        }
+
+        // Auto-save port connection after Device Import lookup
+        async function autoSavePortConnection() {
+            try {
+                const portId = document.getElementById('port-id').value;
+                const mac = document.getElementById('port-mac').value;
+                
+                // Only save if we have essentials
+                if (!portId || !mac) {
+                    console.log('Auto-save skipped: missing required fields');
+                    return;
+                }
+                
+                const formData = new FormData();
+                formData.append('port_id', portId);
+                formData.append('switch_id', document.getElementById('port-switch-id').value);
+                formData.append('port_number', document.getElementById('port-number').value);
+                formData.append('mac', mac);
+                formData.append('ip', document.getElementById('port-ip').value || '');
+                formData.append('user_name', document.getElementById('port-user').value || '');
+                formData.append('location', document.getElementById('port-location').value || '');
+                formData.append('department', document.getElementById('port-department').value || '');
+                formData.append('notes', document.getElementById('port-notes').value || '');
+                formData.append('connection_type', document.getElementById('port-connection-type').value || '');
+                formData.append('connection_info', document.getElementById('port-connection-info').value || '');
+                
+                const response = await fetch('getData.php?action=updatePortConnection', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showToast('Port bağlantısı otomatik kaydedildi (Device Import)', 'success');
+                    closePortModal();
+                    // Refresh current page to show updated data
+                    loadCurrentPage();
+                } else {
+                    console.error('Auto-save failed:', result.error);
+                }
+            } catch (error) {
+                console.error('Auto-save exception:', error);
+                // Silent failure - modal stays open, user can manually save
+            }
+        }
+
+        async function lookupDeviceByMac(mac) {
+            if (!mac || mac.trim() === '') return;
+            
+            try {
+                const response = await fetch(`device_import_api.php?action=get&mac=${encodeURIComponent(mac)}`);
+                const data = await response.json();
+                
+                if (data.success && data.device) {
+                    const device = data.device;
+                    const ipInput = document.getElementById('port-ip');
+                    const connectionInfoInput = document.getElementById('port-connection-info');
+                    
+                    // Check if elements exist before proceeding
+                    if (!ipInput || !connectionInfoInput) {
+                        console.error('Port form elements not found');
+                        return;
+                    }
+                    
+                    // Use helper function to fill and track if fields were filled
+                    const ipFilled = autoFillField(ipInput, device.ip_address);
+                    const infoFilled = autoFillField(connectionInfoInput, device.device_name);
+                    
+                    // Auto-save if we're in edit mode (has port-id) and fields were filled
+                    const portIdElement = document.getElementById('port-id');
+                    const isEditMode = portIdElement && portIdElement.value !== '';
+                    if (isEditMode && (ipFilled || infoFilled)) {
+                        // Immediately save to database
+                        await autoSavePortConnection();
+                    } else if (ipFilled || infoFilled) {
+                        // Only show toast if not auto-saving (new connection)
+                        showToast('Device Import kaydı bulundu ve bilgiler dolduruldu', 'success', 3000);
+                    }
+                } else {
+                    // Kayıt bulunamadı - sessizce devam et, hata gösterme
+                    console.log('Device Import kaydı bulunamadı:', mac);
+                }
+            } catch (error) {
+                console.error('Device Import lookup hatası:', error);
+                // Sessizce devam et, kullanıcıya hata gösterme
+            }
         }
 
         // Rack'teki panelleri filtrele ve yükle
@@ -4768,30 +4830,8 @@ function confirmDeleteRack(rackId) {
                     ).length;
                 });
                 
-                // Sidebar elementlerini güncelle
-                const sidebarElements = {
-                    'sidebar-total-switches': totalSwitches,
-                    'sidebar-active-ports': activePorts,
-                    'sidebar-total-panels': totalPanels
-                };
-                
-                for (const [id, value] of Object.entries(sidebarElements)) {
-                    const element = document.getElementById(id);
-                    if (element) {
-                        element.textContent = value;
-                    } else {
-                        console.warn(`Sidebar element #${id} bulunamadı`);
-                    }
-                }
-                
-                if (lastBackupTime) {
-                    const time = new Date(lastBackupTime);
-                    const lastBackupElement = document.getElementById('sidebar-last-backup');
-                    if (lastBackupElement) {
-                        lastBackupElement.textContent = 
-                            `${time.getHours().toString().padStart(2, '0')}:${time.getMinutes().toString().padStart(2, '0')}`;
-                    }
-                }
+                // Sidebar statistics removed - no longer updating
+                // Previously updated: sidebar-total-switches, sidebar-active-ports, sidebar-total-panels, sidebar-last-backup
                 
             } catch (error) {
                 console.error('updateSidebarStats hatası:', error);
@@ -5464,6 +5504,11 @@ else if (panelType === 'fiber') {
                 case 'port-alarms':
                     loadPortAlarmsPage();
                     break;
+                case 'device-import':
+                    // Device import page is loaded via iframe
+                    // Note: iframe includes sandbox attribute for security
+                    // and error handling for loading failures
+                    break;
             }
         }
 
@@ -5716,11 +5761,8 @@ else if (panelType === 'fiber') {
         }
         
         function loadPortAlarmsPage() {
-            console.log('Loading port alarms page');
-            // Load port alarms when page is displayed
-            if (typeof loadPortAlarms === 'function') {
-                loadPortAlarms(currentAlarmFilter || 'all');
-            }
+            // Port alarms page is loaded via iframe (like device-import)
+            // The iframe loads port_alarms.php which handles its own display
         }
 
         function showSwitchDetail(sw) {
@@ -6218,239 +6260,6 @@ if (isHub) {
             modal.classList.add('active');
         }
 
-        // Excel Import Function
-        async function importExcel(file) {
-            console.log('Excel import başlıyor:', file.name);
-            
-            try {
-                showLoading();
-                
-                // 1. Excel'i oku
-                const data = await readExcelFile(file);
-                console.log('Excel okundu:', data.length, 'switch');
-                
-                if (data.length === 0) {
-                    throw new Error('Excel dosyasında switch bulunamadı');
-                }
-                
-                // 2. Kullanıcı onayı
-                if (!confirm(`${data.length} switch işlenecek. Devam etmek istiyor musunuz?`)) {
-                    throw new Error('Import iptal edildi');
-                }
-                
-                // 3. DOSYA YOLUNU KONTROL EDİN
-                const importUrl = 'importExcel.php';
-                console.log('Import URL:', importUrl);
-                
-                const response = await fetch(importUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(data)
-                });
-                
-                // 4. Response'u kontrol et
-                const responseText = await response.text();
-                console.log('Response type:', response.headers.get('content-type'));
-                console.log('Response first 500 chars:', responseText.substring(0, 500));
-                
-                // Eğer HTML dönüyorsa hata ver
-                if (responseText.trim().startsWith('<!DOCTYPE') || 
-                    responseText.includes('<html') || 
-                    responseText.includes('Personel Arama')) {
-                    
-                    console.error('Wrong file response! Got HTML instead of JSON');
-                    
-                    // Doğru dosya yolunu bulmaya çalış
-                    const possiblePaths = [
-                        'importExcel.php',
-                        'final_import.php',
-                        'importExcel_fixed.php',
-                        'switchp/importExcel.php',
-                        'switchp/final_import.php',
-                        '/switchp/importExcel.php',
-                        './importExcel.php',
-                        './final_import.php'
-                    ];
-                    
-                    let correctPath = null;
-                    
-                    for (const path of possiblePaths) {
-                        try {
-                            const testResponse = await fetch(path, { method: 'HEAD' });
-                            if (testResponse.ok) {
-                                console.log('Found file at:', path);
-                                correctPath = path;
-                                break;
-                            }
-                        } catch (e) {
-                            console.log('Not found:', path);
-                        }
-                    }
-                    
-                    if (correctPath) {
-                        throw new Error(`Yanlış dosya yolu! Lütfen import işlemi için ${correctPath} dosyasını kullanın.`);
-                    } else {
-                        throw new Error('Import PHP dosyası bulunamadı. Lütfen dosya yolunu kontrol edin.');
-                    }
-                }
-                
-                let result;
-                try {
-                    result = JSON.parse(responseText);
-                } catch (parseError) {
-                    console.error('JSON parse error:', parseError);
-                    throw new Error('Sunucudan geçersiz JSON yanıtı alındı. PHP hatası olabilir.');
-                }
-                
-                // 5. Sonucu işle
-                if (result.status === 'ok') {
-                    showToast(`Import başarılı! ${data.length} switch eklendi.`, 'success', 8000);
-                    
-                    // Verileri yenile
-                    await loadData();
-                    
-                } else {
-                    throw new Error(result.message || 'Import hatası');
-                }
-                
-            } catch (error) {
-                console.error('Import hatası:', error);
-                showToast('Import hatası: ' + error.message, 'error');
-            } finally {
-                hideLoading();
-            }
-        }
-
-        function readExcelFile(file) {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                
-                reader.onload = function(e) {
-                    try {
-                        const data = new Uint8Array(e.target.result);
-                        const workbook = XLSX.read(data, { type: 'array' });
-                        
-                        const importData = [];
-                        
-                        workbook.SheetNames.forEach((sheetName, index) => {
-                            const switchName = sheetName.trim();
-                            if (!switchName) return;
-							
-							function normalizePortCount(maxPort) {
-    if (!maxPort) return 48;
-    if (maxPort <= 24) return 24;
-    if (maxPort <= 28) return 28; // 24 + 4 fiber
-    if (maxPort <= 48) return 48;
-    if (maxPort <= 52) return 52; // 48 + 4 fiber
-    return Math.ceil(maxPort / 4) * 4;
-}
-                            
-                            const worksheet = workbook.Sheets[sheetName];
-const jsonData = XLSX.utils.sheet_to_json(worksheet, { 
-    header: 1, 
-    defval: "",
-    raw: false 
-});
-
-// PORT SAYISINI HESAPLA
-let maxPort = 0;
-jsonData.forEach(row => {
-    if (row && row[0]) {
-        const portText = row[0].toString().trim();
-        const portMatch = portText.match(/\d+/);
-        if (portMatch) {
-            const portNo = parseInt(portMatch[0], 10);
-            if (portNo > maxPort) maxPort = portNo;
-        }
-    }
-});
-
-// Normalize edilmiş port sayısı (ör. Giga-28 -> 28, Giga-52 -> 52)
-const ports = normalizePortCount(maxPort);
-
-const portsData = [];
-
-// Port verilerini işle (ör. Port, Description, IP, MAC, Connection)
-jsonData.forEach(row => {
-    if (!row || row.length < 1) return;
-    
-    const portCell = row[0] ? row[0].toString().trim() : '';
-    if (!portCell) return;
-    
-    const portMatch = portCell.match(/\d+/);
-    const portNo = portMatch ? parseInt(portMatch[0], 10) : null;
-    if (!portNo) return;
-    
-    const device = row[1] ? row[1].toString().trim() : '';
-    const ip = row[2] ? row[2].toString().trim() : '';
-    const mac = row[3] ? row[3].toString().trim() : '';
-    const connection = row[4] ? row[4].toString().trim() : '';
-    
-    // Tip çıkarımı (basit)
-    let type = 'DEVICE';
-    const deviceUpper = device.toUpperCase();
-    if (!device && !ip && !mac && !connection) type = 'BOŞ';
-    else if (deviceUpper.includes('AP')) type = 'AP';
-    else if (deviceUpper.includes('IPTV')) type = 'IPTV';
-    else if (deviceUpper.includes('FIBER')) type = 'FIBER';
-    else if (deviceUpper.includes('OTOMASYON')) type = 'OTOMASYON';
-    else if (deviceUpper.includes('SANTRAL')) type = 'SANTRAL';
-    else if (deviceUpper.includes('SERVER')) type = 'SERVER';
-    else if (deviceUpper.includes('HUB')) type = 'HUB';
-    
-    portsData.push({
-        port: portNo,
-        type: type,
-        device: device,
-        ip: ip,
-        mac: mac,
-        connection: connection
-    });
-});
-                            
-                            importData.push({
-                                name: switchName,
-                                brand: 'Cisco',
-                                model: 'Catalyst',
-                                ports: ports,
-                                ip: `172.18.50.${100 + index}`,
-                                ports_data: portsData
-                            });
-                        });
-                        
-                        console.log("Import verisi:", importData);
-                        resolve(importData);
-                        
-                    } catch (error) {
-                        reject(error);
-                    }
-                };
-                
-                reader.onerror = reject;
-                reader.readAsArrayBuffer(file);
-            });
-        }
-
-        function getPortCountFromSwitchName(switchName) {
-            const name = switchName.toUpperCase();
-            if (name.includes("SW2 -OTEL")) return 52;
-            if (name.includes("SW35 -BALO")) return 28;
-            if (name.includes("SW27 - BUYUK KABIN")) return 52;
-            return 48;
-        }
-
-        function getRackFromSwitchName(switchName) {
-            const name = switchName.toUpperCase();
-            if (name.includes("SW2 -OTEL") || name.includes("SW27 - BUYUK KABIN")) return "OTEL";
-            if (name.includes("SW19 -BALIK")) return "BALIK";
-            if (name.includes("SW25 -BALO") || name.includes("SW35 -BALO")) return "BALO";
-            if (name.includes("SW31 -RUBY") || name.includes("SW32 -RUBY")) return "RUBY";
-            if (name.includes("SW26 -VIP")) return "VIP";
-            if (name.includes("IT") || name.includes("BİL")) return "IT";
-            return "OTEL";
-        }
 
         function exportExcel() {
             const workbook = XLSX.utils.book_new();
@@ -6704,42 +6513,62 @@ jsonData.forEach(row => {
                 });
             });
             
-            document.getElementById('nav-add-switch').addEventListener('click', (e) => {
-                e.preventDefault();
-                openSwitchModal();
-            });
-            document.getElementById('nav-add-rack').addEventListener('click', (e) => {
-                e.preventDefault();
-                openRackModal();
-            });
-            document.getElementById('nav-add-panel').addEventListener('click', (e) => {
-                e.preventDefault();
-                openPatchPanelModal();
-            });
-            document.getElementById('nav-backup').addEventListener('click', (e) => {
-                e.preventDefault();
-                openBackupModal();
-            });
-            document.getElementById('nav-export').addEventListener('click', (e) => {
-                e.preventDefault();
-                exportExcel();
-            });
+            // Admin-only navigation event handlers
+            <?php if ($currentUser['role'] === 'admin'): ?>
+            const navAddSwitch = document.getElementById('nav-add-switch');
+            if (navAddSwitch) {
+                navAddSwitch.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    openSwitchModal();
+                });
+            }
             
-            // SNMP Sync button handler
-            document.getElementById('nav-snmp-sync').addEventListener('click', (e) => {
-                e.preventDefault();
-                document.getElementById('snmp-modal').classList.add('active');
-                loadSNMPDevices();
-            });
+            const navAddRack = document.getElementById('nav-add-rack');
+            if (navAddRack) {
+                navAddRack.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    openRackModal();
+                });
+            }
             
-            document.getElementById('nav-history').addEventListener('click', (e) => {
-                e.preventDefault();
-                openBackupModal();
-                setTimeout(() => {
-                    const historyTab = document.querySelector('[data-backup-tab="history"]');
-                    if (historyTab) historyTab.click();
-                }, 100);
-            });
+            const navAddPanel = document.getElementById('nav-add-panel');
+            if (navAddPanel) {
+                navAddPanel.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    openPatchPanelModal();
+                });
+            }
+            
+            const navBackup = document.getElementById('nav-backup');
+            if (navBackup) {
+                navBackup.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    openBackupModal();
+                });
+            }
+            
+            const navExport = document.getElementById('nav-export');
+            if (navExport) {
+                navExport.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    exportExcel();
+                });
+            }
+            <?php endif; ?>
+            
+            <?php if ($currentUser['role'] === 'admin'): ?>
+            const navHistory = document.getElementById('nav-history');
+            if (navHistory) {
+                navHistory.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    openBackupModal();
+                    setTimeout(() => {
+                        const historyTab = document.querySelector('[data-backup-tab="history"]');
+                        if (historyTab) historyTab.click();
+                    }, 100);
+                });
+            }
+            <?php endif; ?>
             
             document.getElementById('add-switch-btn').addEventListener('click', (e) => {
                 e.preventDefault();
@@ -7871,203 +7700,7 @@ ${alarm.is_silenced ? `Sesize Alındı: ${alarm.silence_until} saate kadar\n` : 
         // SNMP DATA FUNCTIONS
         // ============================================
         
-        async function loadSNMPDevices() {
-            try {
-                const response = await fetch('snmp_data_api.php?action=get_devices');
-                const data = await response.json();
-                
-                if (!data.success) {
-                    throw new Error(data.error || 'Failed to load devices');
-                }
-                
-                // Store devices globally for search functionality
-                snmpDevices = data.devices || [];
-                
-                const container = document.getElementById('snmp-devices-list');
-                
-                // Add null check to prevent classList error
-                if (!container) {
-                    console.error('snmp-devices-list container not found');
-                    return;
-                }
-                
-                if (data.devices.length === 0) {
-                    container.innerHTML = '<p style="text-align: center; padding: 40px; color: var(--text-light);">Henüz SNMP Worker tarafından toplanan veri yok.</p>';
-                    return;
-                }
-                
-                let html = '<table style="width: 100%; border-collapse: collapse;">';
-                html += '<thead><tr>';
-                html += '<th style="padding: 12px; text-align: left; border-bottom: 2px solid var(--border);">Cihaz</th>';
-                html += '<th style="padding: 12px; text-align: left; border-bottom: 2px solid var(--border);">IP</th>';
-                html += '<th style="padding: 12px; text-align: left; border-bottom: 2px solid var(--border);">Vendor</th>';
-                html += '<th style="padding: 12px; text-align: left; border-bottom: 2px solid var(--border);">Model</th>';
-                html += '<th style="padding: 12px; text-align: center; border-bottom: 2px solid var(--border);">Port Sayısı</th>';
-                html += '<th style="padding: 12px; text-align: center; border-bottom: 2px solid var(--border);">Durum</th>';
-                html += '<th style="padding: 12px; text-align: left; border-bottom: 2px solid var(--border);">Son Polling</th>';
-                html += '</tr></thead><tbody>';
-                
-                data.devices.forEach(device => {
-                    const statusColor = device.status === 'online' ? 'var(--success)' : 'var(--danger)';
-                    const statusIcon = device.status === 'online' ? 'check-circle' : 'times-circle';
-                    
-                    html += '<tr style="border-bottom: 1px solid var(--border);">';
-                    html += `<td style="padding: 12px;">${device.name}</td>`;
-                    html += `<td style="padding: 12px;">${device.ip_address}</td>`;
-                    html += `<td style="padding: 12px;">${device.vendor}</td>`;
-                    html += `<td style="padding: 12px;">${device.model}</td>`;
-                    html += `<td style="padding: 12px; text-align: center;">${device.total_ports || '-'}</td>`;
-                    html += `<td style="padding: 12px; text-align: center;"><i class="fas fa-${statusIcon}" style="color: ${statusColor};"></i> ${device.status}</td>`;
-                    html += `<td style="padding: 12px;">${device.last_successful_poll ? new Date(device.last_successful_poll).toLocaleString('tr-TR') : 'Hiç'}</td>`;
-                    html += '</tr>';
-                });
-                
-                html += '</tbody></table>';
-                container.innerHTML = html;
-                
-            } catch (error) {
-                console.error('Error loading SNMP devices:', error);
-                document.getElementById('snmp-devices-list').innerHTML = 
-                    '<p style="text-align: center; padding: 40px; color: var(--danger);">Hata: ' + error.message + '</p>';
-            }
-        }
-        
-        async function loadSNMPAlarms() {
-            try {
-                const response = await fetch('snmp_data_api.php?action=get_alarms');
-                const data = await response.json();
-                
-                if (!data.success) {
-                    throw new Error(data.error || 'Failed to load alarms');
-                }
-                
-                const container = document.getElementById('snmp-alarms-list');
-                
-                if (data.alarms.length === 0) {
-                    container.innerHTML = '<p style="text-align: center; padding: 40px; color: var(--success);">✓ Aktif alarm yok</p>';
-                    return;
-                }
-                
-                let html = '<div style="display: flex; flex-direction: column; gap: 10px;">';
-                
-                data.alarms.forEach(alarm => {
-                    const severityColors = {
-                        'critical': 'var(--danger)',
-                        'high': 'var(--warning)',
-                        'medium': '#f59e0b',
-                        'low': 'var(--primary)',
-                        'info': 'var(--text-light)'
-                    };
-                    
-                    const color = severityColors[alarm.severity] || 'var(--text-light)';
-                    
-                    html += `<div style="background: rgba(15, 23, 42, 0.5); border-left: 4px solid ${color}; border-radius: 8px; padding: 15px;">`;
-                    html += `<div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">`;
-                    html += `<div>`;
-                    html += `<h4 style="color: ${color}; margin-bottom: 5px;">${alarm.title}</h4>`;
-                    html += `<p style="color: var(--text-light); font-size: 0.9rem;">${alarm.device_name} (${alarm.device_ip})${alarm.port_number ? ' - Port ' + alarm.port_number : ''}</p>`;
-                    html += `</div>`;
-                    html += `<span style="background: ${color}20; color: ${color}; padding: 4px 12px; border-radius: 20px; font-size: 0.85rem; font-weight: 600;">${alarm.severity.toUpperCase()}</span>`;
-                    html += `</div>`;
-                    html += `<p style="color: var(--text); margin-bottom: 10px;">${alarm.message}</p>`;
-                    html += `<div style="display: flex; gap: 20px; font-size: 0.85rem; color: var(--text-light);">`;
-                    html += `<span><i class="fas fa-clock"></i> ${new Date(alarm.last_occurrence).toLocaleString('tr-TR')}</span>`;
-                    if (alarm.occurrence_count > 1) {
-                        html += `<span><i class="fas fa-redo"></i> ${alarm.occurrence_count} kez tekrarlandı</span>`;
-                    }
-                    html += `</div>`;
-                    html += `</div>`;
-                });
-                
-                html += '</div>';
-                container.innerHTML = html;
-                
-            } catch (error) {
-                console.error('Error loading alarms:', error);
-                document.getElementById('snmp-alarms-list').innerHTML = 
-                    '<p style="text-align: center; padding: 40px; color: var(--danger);">Hata: ' + error.message + '</p>';
-            }
-        }
-        
-        async function syncSNMPToSwitches() {
-            const resultDiv = document.getElementById('sync-result');
-            
-            try {
-                resultDiv.innerHTML = '<p style="text-align: center; padding: 20px;"><i class="fas fa-spinner fa-spin"></i> Senkronize ediliyor...</p>';
-                
-                const response = await fetch('snmp_data_api.php?action=sync_to_switches');
-                const data = await response.json();
-                
-                if (!data.success) {
-                    throw new Error(data.error || 'Senkronizasyon başarısız');
-                }
-                
-                resultDiv.innerHTML = `
-                    <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 10px; padding: 20px;">
-                        <h4 style="color: var(--success); margin-bottom: 10px;">
-                            <i class="fas fa-check-circle"></i> Başarılı!
-                        </h4>
-                        <p style="color: var(--text);">${data.message}</p>
-                        <p style="color: var(--text-light); font-size: 0.9rem; margin-top: 10px;">
-                            Toplam ${data.synced_count} cihaz ve portları ana veritabanına aktarıldı.
-                        </p>
-                    </div>
-                `;
-                
-                // Reload main data
-                setTimeout(() => {
-                    loadData();
-                    showToast('Veriler güncellendi', 'success');
-                }, 1000);
-                
-            } catch (error) {
-                console.error('Sync error:', error);
-                resultDiv.innerHTML = `
-                    <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 10px; padding: 20px;">
-                        <h4 style="color: var(--danger); margin-bottom: 10px;">
-                            <i class="fas fa-exclamation-circle"></i> Hata
-                        </h4>
-                        <p style="color: var(--text);">${error.message}</p>
-                    </div>
-                `;
-            }
-        }
-        
-        // SNMP Modal close handlers
-        document.getElementById('close-snmp-modal')?.addEventListener('click', () => {
-            document.getElementById('snmp-modal').classList.remove('active');
-        });
-        
-        document.getElementById('snmp-modal')?.addEventListener('click', function(e) {
-            if (e.target === this) {
-                this.classList.remove('active');
-            }
-        });
-        
-        // SNMP tab handlers
-        document.querySelectorAll('[data-snmp-tab]').forEach(tab => {
-            tab.addEventListener('click', function() {
-                // Update active tab
-                document.querySelectorAll('[data-snmp-tab]').forEach(t => t.classList.remove('active'));
-                this.classList.add('active');
-                
-                // Hide all tab contents
-                document.querySelectorAll('#snmp-content .tab-content').forEach(c => c.classList.remove('active'));
-                
-                // Show selected tab
-                const tabName = this.getAttribute('data-snmp-tab');
-                document.getElementById('snmp-tab-' + tabName)?.classList.add('active');
-                
-                // Load data for tab
-                if (tabName === 'devices') {
-                    loadSNMPDevices();
-                } else if (tabName === 'alarms') {
-                    loadSNMPAlarms();
-                }
-            });
-        });
-        
-        // Handle URL parameters (e.g., switch_id from snmp_admin.php)
+        // Handle URL parameters (e.g., switch_id from admin.php)
         function handleURLParameters() {
             const urlParams = new URLSearchParams(window.location.search);
             const switchId = urlParams.get('switch_id');
@@ -8095,6 +7728,40 @@ ${alarm.is_silenced ? `Sesize Alındı: ${alarm.silence_until} saate kadar\n` : 
         // Handle URL parameters after init
         document.addEventListener('DOMContentLoaded', () => {
             setTimeout(handleURLParameters, 1000); // Wait for data to load
+        });
+        
+        // Listen for messages from iframe (e.g., port_alarms.php)
+        window.addEventListener('message', function(event) {
+            // Security check - you may want to add origin validation
+            if (event.data && event.data.action === 'navigateToPort') {
+                const switchName = event.data.switchName;
+                const portNumber = event.data.portNumber;
+                
+                console.log('Received navigateToPort message:', switchName, portNumber);
+                
+                // Navigate to switches page first
+                updatePageContent('switches');
+                
+                // Wait for switches page to load, then find and open the switch
+                setTimeout(() => {
+                    const switchToOpen = switches.find(s => s.name === switchName);
+                    if (switchToOpen) {
+                        console.log('Opening switch:', switchToOpen);
+                        showSwitchDetail(switchToOpen);
+                        
+                        // Highlight the specific port after a small delay
+                        setTimeout(() => {
+                            const portElement = document.querySelector(`#detail-ports-grid .port-item[data-port="${portNumber}"]`);
+                            if (portElement) {
+                                portElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                portElement.style.animation = 'pulse 2s ease-in-out 3';
+                            }
+                        }, 500);
+                    } else {
+                        showToast('Switch bulunamadı: ' + switchName, 'error');
+                    }
+                }, 1000);
+            }
         });
     </script>
 	<script src="index_fiber_bridge_patch.js"></script>
@@ -8374,6 +8041,15 @@ ${alarm.is_silenced ? `Sesize Alındı: ${alarm.silence_until} saate kadar\n` : 
                 to {
                     transform: translateX(400px);
                     opacity: 0;
+                }
+            }
+            
+            @keyframes pulse {
+                0%, 100% {
+                    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
+                }
+                50% {
+                    box-shadow: 0 0 0 20px rgba(59, 130, 246, 0);
                 }
             }
             
