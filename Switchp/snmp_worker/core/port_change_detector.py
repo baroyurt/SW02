@@ -5,6 +5,7 @@ Monitors MAC addresses, VLANs, descriptions, and creates alarms for changes.
 
 import logging
 import json
+import re
 from typing import Optional, Dict, List, Tuple, Any
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
@@ -23,6 +24,9 @@ class PortChangeDetector:
     Detects and tracks changes in port configurations.
     Compares current state with previous snapshots to identify changes.
     """
+    
+    # MAC address validation pattern (XX:XX:XX:XX:XX:XX where X is hex digit)
+    MAC_ADDRESS_PATTERN = re.compile(r'^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$')
     
     def __init__(
         self,
@@ -279,10 +283,13 @@ class PortChangeDetector:
             switch_id = self._get_switch_id_from_device(session, device.id)
             
             if switch_id:
-                # Validate MAC address format (basic check)
-                # MAC should be in format XX:XX:XX:XX:XX:XX
-                if not mac_address or len(mac_address) != 17:
-                    raise ValueError(f"Invalid MAC address format: {mac_address}")
+                # Validate MAC address format using regex
+                # MAC should be in format XX:XX:XX:XX:XX:XX where X is a hex digit
+                if not self.MAC_ADDRESS_PATTERN.match(mac_address):
+                    raise ValueError(
+                        f"Invalid MAC address format: {mac_address}. "
+                        f"Expected format: XX:XX:XX:XX:XX:XX"
+                    )
                 
                 # Check if this port already has this MAC documented
                 # Using exact match only for performance
