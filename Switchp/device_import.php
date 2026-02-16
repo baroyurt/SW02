@@ -441,6 +441,57 @@ $currentUser = $auth->getUser();
         </div>
     </div>
     
+    <!-- Edit Device Modal -->
+    <div id="edit-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center;">
+        <div style="background: var(--dark-light); border-radius: 15px; padding: 30px; width: 90%; max-width: 500px; box-shadow: 0 10px 40px rgba(0,0,0,0.5);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 style="color: var(--primary); margin: 0;">
+                    <i class="fas fa-edit"></i> Cihaz Düzenle
+                </h2>
+                <button onclick="closeEditModal()" style="background: none; border: none; color: var(--text); font-size: 24px; cursor: pointer; padding: 0; width: 30px; height: 30px;">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <form id="edit-form">
+                <input type="hidden" id="edit-device-id">
+                <input type="hidden" id="edit-original-mac">
+                
+                <div class="form-group">
+                    <label for="edit-ip-address">
+                        <i class="fas fa-network-wired"></i> IP Address
+                    </label>
+                    <input type="text" id="edit-ip-address" placeholder="e.g., 192.0.2.10" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="edit-hostname">
+                        <i class="fas fa-server"></i> Hostname
+                    </label>
+                    <input type="text" id="edit-hostname" placeholder="e.g., TEST-PC-01" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="edit-mac-address">
+                        <i class="fas fa-ethernet"></i> MAC Address
+                    </label>
+                    <input type="text" id="edit-mac-address" placeholder="e.g., 00:11:22:33:44:55" required>
+                </div>
+                
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button type="button" onclick="closeEditModal()" class="btn" style="flex: 1; background: var(--border);">
+                        <i class="fas fa-times"></i> İptal
+                    </button>
+                    <button type="submit" class="btn btn-success" style="flex: 1;">
+                        <i class="fas fa-save"></i> Kaydet
+                    </button>
+                </div>
+            </form>
+            
+            <div class="result-message" id="edit-result" style="margin-top: 15px;"></div>
+        </div>
+    </div>
+    
     <script>
         const uploadArea = document.getElementById('upload-area');
         const fileInput = document.getElementById('file-input');
@@ -629,6 +680,7 @@ $currentUser = $auth->getUser();
                                 <th>Hostname</th>
                                 <th>Source</th>
                                 <th>Updated</th>
+                                <th style="text-align: center;">Actions</th>
                             </tr>`;
                         
                         data.devices.forEach(device => {
@@ -638,6 +690,11 @@ $currentUser = $auth->getUser();
                                 <td><strong>${device.device_name}</strong></td>
                                 <td><span style="color: var(--${device.source === 'manual' ? 'success' : 'primary'});">${device.source}</span></td>
                                 <td style="color: var(--text-light);">${new Date(device.updated_at).toLocaleString()}</td>
+                                <td style="text-align: center;">
+                                    <button onclick='openEditModal(${JSON.stringify(device)})' class="btn btn-sm" style="padding: 5px 10px; background: var(--primary);">
+                                        <i class="fas fa-edit"></i> Düzenle
+                                    </button>
+                                </td>
                             </tr>`;
                         });
                         
@@ -657,6 +714,74 @@ $currentUser = $auth->getUser();
                         '<p style="color: var(--danger);">Error loading devices</p>';
                 });
         }
+        
+        function openEditModal(device) {
+            document.getElementById('edit-device-id').value = device.id || '';
+            document.getElementById('edit-original-mac').value = device.mac_address;
+            document.getElementById('edit-ip-address').value = device.ip_address || '';
+            document.getElementById('edit-hostname').value = device.device_name || '';
+            document.getElementById('edit-mac-address').value = device.mac_address;
+            document.getElementById('edit-result').innerHTML = '';
+            
+            const modal = document.getElementById('edit-modal');
+            modal.style.display = 'flex';
+        }
+        
+        function closeEditModal() {
+            document.getElementById('edit-modal').style.display = 'none';
+            document.getElementById('edit-form').reset();
+        }
+        
+        // Edit form submission
+        document.getElementById('edit-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const originalMac = document.getElementById('edit-original-mac').value;
+            const ipAddress = document.getElementById('edit-ip-address').value;
+            const hostname = document.getElementById('edit-hostname').value;
+            const macAddress = document.getElementById('edit-mac-address').value;
+            
+            const resultDiv = document.getElementById('edit-result');
+            resultDiv.innerHTML = '<p style="color: var(--warning);">Updating device...</p>';
+            
+            try {
+                const response = await fetch('device_import_api.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        action: 'update',
+                        original_mac: originalMac,
+                        ip_address: ipAddress,
+                        device_name: hostname,
+                        mac_address: macAddress
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    resultDiv.innerHTML = `<p style="color: var(--success);">
+                        <i class="fas fa-check-circle"></i> ${result.message || 'Device updated successfully!'}
+                    </p>`;
+                    
+                    // Reload devices after successful update
+                    setTimeout(() => {
+                        closeEditModal();
+                        loadDevices();
+                    }, 1500);
+                } else {
+                    resultDiv.innerHTML = `<p style="color: var(--danger);">
+                        <i class="fas fa-exclamation-circle"></i> Error: ${result.error || 'Update failed'}
+                    </p>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<p style="color: var(--danger);">
+                    <i class="fas fa-exclamation-circle"></i> Network error: ${error.message}
+                </p>`;
+            }
+        });
         
         function downloadTemplate() {
             // Create a simple CSV template with RFC 5737 test addresses

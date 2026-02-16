@@ -418,6 +418,87 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_FILES['excel_file'])) {
         $conn->close();
         exit;
     }
+    
+    // Update existing device
+    if ($action === 'update') {
+        $originalMac = isset($data['original_mac']) ? normalizeMac($data['original_mac']) : null;
+        $newMac = isset($data['mac_address']) ? normalizeMac($data['mac_address']) : null;
+        $ip = isset($data['ip_address']) ? trim($data['ip_address']) : null;
+        $hostname = isset($data['device_name']) ? trim($data['device_name']) : null;
+        
+        // Validate inputs
+        $errors = [];
+        
+        if (!$originalMac) {
+            $errors[] = 'Original MAC address is required';
+        }
+        
+        if (!$newMac) {
+            $errors[] = 'Invalid new MAC address format';
+        }
+        
+        if ($ip && !validateIP($ip)) {
+            $errors[] = 'Invalid IP address format';
+        }
+        
+        if (!$hostname) {
+            $errors[] = 'Hostname is required';
+        }
+        
+        if (count($errors) > 0) {
+            echo json_encode(['success' => false, 'error' => implode(', ', $errors)]);
+            exit;
+        }
+        
+        $conn = getDBConnection();
+        
+        try {
+            // If MAC changed, delete old record and insert new one
+            if ($originalMac !== $newMac) {
+                // Delete old record
+                $stmt = $conn->prepare("DELETE FROM mac_device_registry WHERE mac_address = ?");
+                $stmt->bind_param('s', $originalMac);
+                $stmt->execute();
+                $stmt->close();
+            }
+            
+            // Insert or update with new data
+            $stmt = $conn->prepare("
+                INSERT INTO mac_device_registry 
+                (mac_address, ip_address, device_name, source, created_by)
+                VALUES (?, ?, ?, 'manual', ?)
+                ON DUPLICATE KEY UPDATE
+                    ip_address = VALUES(ip_address),
+                    device_name = VALUES(device_name),
+                    source = 'manual',
+                    updated_by = VALUES(created_by)
+            ");
+            
+            $updated_by = getAuthenticatedUser($auth);
+            $stmt->bind_param('ssss', $newMac, $ip, $hostname, $updated_by);
+            
+            if ($stmt->execute()) {
+                echo json_encode([
+                    'success' => true,
+                    'message' => 'Device updated successfully',
+                    'device' => [
+                        'mac_address' => $newMac,
+                        'ip_address' => $ip,
+                        'device_name' => $hostname
+                    ]
+                ]);
+            } else {
+                echo json_encode(['success' => false, 'error' => 'Database error: ' . $stmt->error]);
+            }
+            
+            $stmt->close();
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        }
+        
+        $conn->close();
+        exit;
+    }
 }
 
 // Handle DELETE
