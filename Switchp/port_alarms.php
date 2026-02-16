@@ -501,6 +501,36 @@ $alarmsData = getActiveAlarmsData($conn);
             outline: none;
             border-color: var(--primary);
         }
+        
+        /* Improved card shadows and styling to match index.php */
+        .stat-card {
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+        
+        .stat-card:hover {
+            box-shadow: 0 8px 12px rgba(0, 0, 0, 0.4);
+            transform: translateY(-2px);
+        }
+        
+        .alarm-card {
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
+        }
+        
+        .alarm-card:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+            transform: translateY(-2px);
+        }
+        
+        /* Animation for pulse effect */
+        @keyframes pulse {
+            0%, 100% {
+                box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
+            }
+            50% {
+                box-shadow: 0 0 0 20px rgba(59, 130, 246, 0);
+            }
+        }
     </style>
 </head>
 <body>
@@ -686,11 +716,9 @@ $alarmsData = getActiveAlarmsData($conn);
                             <button class="btn btn-primary" onclick="openAckModal(${alarm.id})">
                                 <i class="fas fa-check"></i> Bilgi Dahilinde Kapat
                             </button>
-                            ${!alarm.is_silenced ? `
-                                <button class="btn btn-secondary" onclick="openSilenceModal(${alarm.id})">
-                                    <i class="fas fa-bell-slash"></i> Alarmı Sesize Al
-                                </button>
-                            ` : ''}
+                            <button class="btn btn-secondary" onclick="openSilenceModal(${alarm.id})">
+                                <i class="fas fa-bell-slash"></i> ${alarm.is_silenced ? 'Sessizliği Yönet' : 'Alarmı Sesize Al'}
+                            </button>
                             ${alarm.port_number ? `
                                 <button class="btn btn-secondary" onclick="viewPort('${alarm.device_name}', ${alarm.port_number})">
                                     <i class="fas fa-eye"></i> View Port
@@ -840,8 +868,18 @@ $alarmsData = getActiveAlarmsData($conn);
         }
         
         function viewPort(deviceName, portNumber) {
-            alert('Port Görüntüleme - Cihaz: ' + deviceName + ', Port: ' + portNumber);
-            // This would typically open a detailed port view
+            // Check if we're in an iframe
+            if (window.parent !== window) {
+                // We're in an iframe - communicate with parent
+                window.parent.postMessage({
+                    action: 'navigateToPort',
+                    switchName: deviceName,
+                    portNumber: portNumber
+                }, '*');
+            } else {
+                // Standalone mode - navigate directly
+                window.location.href = `index.php?switch=${encodeURIComponent(deviceName)}&port=${portNumber}`;
+            }
         }
         
         function formatDate(dateString) {

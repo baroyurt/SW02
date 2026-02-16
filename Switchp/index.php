@@ -7574,6 +7574,40 @@ ${alarm.is_silenced ? `Sesize Alındı: ${alarm.silence_until} saate kadar\n` : 
         document.addEventListener('DOMContentLoaded', () => {
             setTimeout(handleURLParameters, 1000); // Wait for data to load
         });
+        
+        // Listen for messages from iframe (e.g., port_alarms.php)
+        window.addEventListener('message', function(event) {
+            // Security check - you may want to add origin validation
+            if (event.data && event.data.action === 'navigateToPort') {
+                const switchName = event.data.switchName;
+                const portNumber = event.data.portNumber;
+                
+                console.log('Received navigateToPort message:', switchName, portNumber);
+                
+                // Navigate to switches page first
+                updatePageContent('switches');
+                
+                // Wait for switches page to load, then find and open the switch
+                setTimeout(() => {
+                    const switchToOpen = switches.find(s => s.name === switchName);
+                    if (switchToOpen) {
+                        console.log('Opening switch:', switchToOpen);
+                        showSwitchDetail(switchToOpen);
+                        
+                        // Highlight the specific port after a small delay
+                        setTimeout(() => {
+                            const portElement = document.querySelector(`#detail-ports-grid .port-item[data-port="${portNumber}"]`);
+                            if (portElement) {
+                                portElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                portElement.style.animation = 'pulse 2s ease-in-out 3';
+                            }
+                        }, 500);
+                    } else {
+                        showToast('Switch bulunamadı: ' + switchName, 'error');
+                    }
+                }, 1000);
+            }
+        });
     </script>
 	<script src="index_fiber_bridge_patch.js"></script>
     <!-- Port Change Highlighting and VLAN Display Module -->
@@ -7852,6 +7886,15 @@ ${alarm.is_silenced ? `Sesize Alındı: ${alarm.silence_until} saate kadar\n` : 
                 to {
                     transform: translateX(400px);
                     opacity: 0;
+                }
+            }
+            
+            @keyframes pulse {
+                0%, 100% {
+                    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
+                }
+                50% {
+                    box-shadow: 0 0 0 20px rgba(59, 130, 246, 0);
                 }
             }
             
