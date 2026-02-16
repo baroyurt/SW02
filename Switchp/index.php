@@ -4176,6 +4176,14 @@ function confirmDeleteRack(rackId) {
             // Panel tipi değişim eventi
             setupPanelTypeChangeEvent(sw.rack_id, isFiberPort);
             
+            // Device Import lookup - MAC adresi değiştiğinde otomatik doldur
+            setupDeviceImportLookup();
+            
+            // Mevcut MAC varsa ve device import kaydı varsa lookup yap
+            if (existingConnection && existingConnection.mac) {
+                lookupDeviceByMac(existingConnection.mac);
+            }
+            
             modal.classList.add('active');
         }
 
@@ -4222,6 +4230,72 @@ function confirmDeleteRack(rackId) {
                     portInput.disabled = true;
                 }
             });
+        }
+
+        // Device Import Lookup - MAC adresine göre cihaz bilgilerini otomatik doldur
+        function setupDeviceImportLookup() {
+            const macInput = document.getElementById('port-mac');
+            
+            if (!macInput) return;
+            
+            // Önceki event listener'ları temizle
+            const newMacInput = macInput.cloneNode(true);
+            macInput.parentNode.replaceChild(newMacInput, macInput);
+            
+            // Yeni event listener ekle
+            document.getElementById('port-mac').addEventListener('blur', function() {
+                const mac = this.value.trim();
+                if (mac && mac.length >= 12) {
+                    lookupDeviceByMac(mac);
+                }
+            });
+        }
+
+        // MAC adresine göre Device Import registry'den cihaz bilgilerini al
+        async function lookupDeviceByMac(mac) {
+            if (!mac || mac.trim() === '') return;
+            
+            try {
+                const response = await fetch(`device_import_api.php?action=get&mac=${encodeURIComponent(mac)}`);
+                const data = await response.json();
+                
+                if (data.success && data.device) {
+                    const device = data.device;
+                    const ipInput = document.getElementById('port-ip');
+                    const connectionInfoInput = document.getElementById('port-connection-info');
+                    
+                    // IP adresini doldur (sadece boşsa)
+                    if (device.ip_address && (!ipInput.value || ipInput.value.trim() === '')) {
+                        ipInput.value = device.ip_address;
+                        // Görsel feedback
+                        ipInput.style.backgroundColor = '#dcfce7'; // Açık yeşil
+                        setTimeout(() => {
+                            ipInput.style.backgroundColor = '';
+                        }, 2000);
+                    }
+                    
+                    // Hostname'i Connection Info'ya doldur (sadece boşsa)
+                    if (device.device_name && (!connectionInfoInput.value || connectionInfoInput.value.trim() === '')) {
+                        connectionInfoInput.value = device.device_name;
+                        // Görsel feedback
+                        connectionInfoInput.style.backgroundColor = '#dcfce7'; // Açık yeşil
+                        setTimeout(() => {
+                            connectionInfoInput.style.backgroundColor = '';
+                        }, 2000);
+                    }
+                    
+                    // Kullanıcıya bilgi ver
+                    if (device.ip_address || device.device_name) {
+                        showToast('Device Import kaydı bulundu ve bilgiler dolduruldu', 'success', 3000);
+                    }
+                } else {
+                    // Kayıt bulunamadı - sessizce devam et, hata gösterme
+                    console.log('Device Import kaydı bulunamadı:', mac);
+                }
+            } catch (error) {
+                console.error('Device Import lookup hatası:', error);
+                // Sessizce devam et, kullanıcıya hata gösterme
+            }
         }
 
         // Rack'teki panelleri filtrele ve yükle
