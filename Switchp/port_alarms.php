@@ -815,8 +815,8 @@ $alarmsData = getActiveAlarmsData($conn);
                 const formData = new FormData();
                 formData.append('action', 'acknowledge_alarm');
                 formData.append('alarm_id', selectedAlarmId);
-                formData.append('acknowledgment_type', ackType);
-                if (notes) formData.append('notes', notes);
+                formData.append('ack_type', ackType); // Fixed: was 'acknowledgment_type'
+                if (notes) formData.append('note', notes); // Fixed: was 'notes'
                 
                 const response = await fetch('port_change_api.php', {
                     method: 'POST',
@@ -827,6 +827,7 @@ $alarmsData = getActiveAlarmsData($conn);
                 
                 if (data.success) {
                     alert('Alarm başarıyla kapatıldı');
+                    closeAckModal();
                     location.reload();
                 } else {
                     alert('Hata: ' + (data.error || 'Bilinmeyen hata'));
@@ -834,18 +835,17 @@ $alarmsData = getActiveAlarmsData($conn);
             } catch (error) {
                 alert('Hata: ' + error.message);
             }
-            
-            closeAckModal();
         }
         
         async function submitSilence() {
-            const duration = document.getElementById('silenceDuration').value;
+            const durationMinutes = parseInt(document.getElementById('silenceDuration').value);
+            const durationHours = durationMinutes / 60; // Convert minutes to hours
             
             try {
                 const formData = new FormData();
                 formData.append('action', 'silence_alarm');
                 formData.append('alarm_id', selectedAlarmId);
-                formData.append('duration', duration);
+                formData.append('duration_hours', durationHours); // Fixed: send hours instead of minutes
                 
                 const response = await fetch('port_change_api.php', {
                     method: 'POST',
@@ -856,6 +856,7 @@ $alarmsData = getActiveAlarmsData($conn);
                 
                 if (data.success) {
                     alert('Alarm başarıyla sesize alındı');
+                    closeSilenceModal();
                     location.reload();
                 } else {
                     alert('Hata: ' + (data.error || 'Bilinmeyen hata'));
@@ -863,8 +864,6 @@ $alarmsData = getActiveAlarmsData($conn);
             } catch (error) {
                 alert('Hata: ' + error.message);
             }
-            
-            closeSilenceModal();
         }
         
         function viewPort(deviceName, portNumber) {
